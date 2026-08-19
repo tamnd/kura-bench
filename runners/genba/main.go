@@ -1,23 +1,29 @@
 // Command genba-runner measures the platform's own store and searcher.
 //
-// The store it uses keeps everything in memory and has no on disk form yet, so
-// there is nothing to reopen. Open therefore rebuilds the index from the corpus,
-// which is exactly what this deployment shape has to do after a restart, and it
-// is the honest thing to put next to an engine that memory maps a file and is
-// answering queries in a few milliseconds. The index size on disk is zero for
-// the same reason, and the resident memory figure is where the cost shows up.
+// It runs on the SQLite driver, which is the one a deployment without a data
+// warehouse behind it actually uses. That is the whole reason to pick it here:
+// it has an on disk form, so the store size and the cold start columns mean
+// what they say, and it applies the terms and the permission rule inside the
+// statement rather than handing every document it holds to the ranker.
+//
+// The in memory driver is the reference implementation and is deliberately not
+// measured. It has no index, so a query walks the corpus and tokenises every
+// document in it, which on eighty thousand documents is tens of seconds per
+// query. That is the correct shape for something whose job is to be obviously
+// right, and putting it in a table next to a memory mapped index would be
+// comparing a specification with a product.
 package main
 
 import (
 	"context"
-	"errors"
+	"path/filepath"
 	"time"
 
 	"github.com/tamnd/genba/acl"
 	"github.com/tamnd/genba/doc"
 	"github.com/tamnd/genba/index"
 	"github.com/tamnd/genba/store"
-	"github.com/tamnd/genba/store/memstore"
+	"github.com/tamnd/genba/store/sqlitestore"
 
 	"github.com/tamnd/kura-bench/corpus"
 	"github.com/tamnd/kura-bench/runner"
@@ -55,46 +61,20 @@ func (e *engine) Describe() runner.Info {
 }
 
 func (e *engine) Create(dir string) error {
-	e.start()
-	return nil
+	return e.start(dir)
 }
 
-// Open rebuilds from the corpus, because an in memory store has nothing to
-// attach to. The time it takes is a real cost of running this way and it
-// belongs in the cold start column rather than in a footnote.
+// Open attaches to the database the build phase left behind, which is what a
+// restart looks like.
 func (e *engine) Open(dir string) error {
-	e.start()
+	return e.start(dir)
+}
 
-	batch := make([]corpus.Document, 0, runner.BatchSize)
-	var seen int
-	_, err := corpus.ReadFile(e.cfg.Corpus, func(d corpus.Document) error {
-		if e.cfg.Limit > 0 && seen >= e.cfg.Limit {
-			return corpus.ErrStop
-		}
-		seen++
-		batch = append(batch, d)
-		if len(batch) < runner.BatchSize {
-			return nil
-		}
-		if err := e.AddBatch(batch); err != nil {
-			return err
-		}
-		batch = batch[:0]
-		return nil
-	})
-	if err != nil && !errors.Is(err, corpus.ErrStop) {
+func (e *engine) start(dir string) error {
+	st, err := sqlitestore.Open(context.Background(), filepath.Join(dir, "genba.db"))
+	if err != nil {
 		return err
 	}
-	if len(batch) > 0 {
-		if err := e.AddBatch(batch); err != nil {
-			return err
-		}
-	}
-	return e.Flush()
-}
-
-func (e *engine) start() {
-	st := memstore.New()
 	e.store = st
 	e.searcher = index.New(st)
 	e.principal = &acl.Principal{
@@ -102,6 +82,7 @@ func (e *engine) start() {
 		Subject: "bench",
 		Kind:    acl.KindUser,
 	}
+	return nil
 }
 
 func (e *engine) AddBatch(docs []corpus.Document) error {
@@ -128,8 +109,8 @@ func (e *engine) AddBatch(docs []corpus.Document) error {
 	return e.store.Put(context.Background(), out...)
 }
 
-// Flush has nothing to do. Put is durable in the only sense this store has, and
-// pretending otherwise by sleeping here would be a fake number.
+// Flush has nothing to do. Put commits, so everything written is already on
+// disk, and sleeping here to look busy would be a fake number.
 func (e *engine) Flush() error { return nil }
 
 func (e *engine) Search(ctx context.Context, query string, limit int) (int, error) {
