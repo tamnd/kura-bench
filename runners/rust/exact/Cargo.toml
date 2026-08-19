@@ -1,0 +1,12 @@
+[package]
+name = "exact-vecrunner"
+description = "The brute force baseline every approximate index in kura-bench is measured against"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+benchrs.workspace = true
+serde_json.workspace = true

@@ -37,10 +37,12 @@ type Machine struct {
 	// moves by one factor, the machine moved and not the code, and the only way
 	// to see that afterwards is to have written down what the machine was
 	// doing at the time.
-	LoadBefore       float64 `json:"load_before"`
-	MemoryFreeBytes  int64   `json:"memory_free_bytes"`
-	Dedicated        bool    `json:"dedicated"`
-	DedicatedComment string  `json:"dedicated_comment,omitempty"`
+	LoadBefore      float64 `json:"load_before"`
+	MemoryFreeBytes int64   `json:"memory_free_bytes"`
+
+	// Dedicated says the machine was idle enough for the numbers to mean what
+	// they say. The report writes the sentence, this is the judgement.
+	Dedicated bool `json:"dedicated"`
 }
 
 // Describe reads what it can about the machine. Fields the platform does not
@@ -62,9 +64,6 @@ func Describe() Machine {
 	// on thirty two.
 	if m.Cores > 0 {
 		m.Dedicated = m.LoadBefore/float64(m.Cores) < 0.2
-	}
-	if !m.Dedicated {
-		m.DedicatedComment = "the machine was busy when the run started, so treat these numbers as a floor"
 	}
 	return m
 }

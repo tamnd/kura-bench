@@ -14,6 +14,7 @@ pub mod corpus;
 pub mod machine;
 pub mod result;
 pub mod usage;
+pub mod vector;
 
 /// How many documents the update phase rewrites. The Go runners use the same
 /// number, on purpose: a figure that means five thousand documents on one

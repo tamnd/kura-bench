@@ -15,9 +15,9 @@ pub struct Machine {
     pub memory_bytes: i64,
     pub load_before: f64,
     pub memory_free_bytes: i64,
+    /// Whether the machine was idle enough for the numbers to mean what they
+    /// say. The report writes the sentence, this is the judgement.
     pub dedicated: bool,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub dedicated_comment: String,
 }
 
 pub fn describe() -> Machine {
@@ -44,11 +44,6 @@ pub fn describe() -> Machine {
     // on thirty two.
     if cores > 0 {
         m.dedicated = load / (cores as f64) < 0.2;
-    }
-    if !m.dedicated {
-        m.dedicated_comment =
-            "the machine was busy when the run started, so treat these numbers as a floor"
-                .to_string();
     }
     m
 }

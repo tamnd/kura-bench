@@ -122,8 +122,12 @@ func writeMarkdown(w *os.File, statuses []versions.Status) {
 	fmt.Fprintln(w, "| engine | package | pinned | latest | state |")
 	fmt.Fprintln(w, "| --- | --- | --- | --- | --- |")
 	for _, s := range statuses {
-		fmt.Fprintf(w, "| %s | `%s` | %s | %s | %s |\n",
-			s.Engine.Name, s.Engine.Package, or(s.Pinned, "-"), or(s.Latest, "-"), state(s))
+		pkg := "-"
+		if s.Engine.Package != "" {
+			pkg = "`" + s.Engine.Package + "`"
+		}
+		fmt.Fprintf(w, "| %s | %s | %s | %s | %s |\n",
+			s.Engine.Name, pkg, or(s.Pinned, "-"), or(s.Latest, "-"), state(s))
 	}
 }
 
@@ -133,6 +137,8 @@ func state(s versions.Status) string {
 		return "could not check: " + s.Err.Error()
 	case s.Behind():
 		return "behind"
+	case s.Engine.Registry == "none":
+		return "nothing to track"
 	default:
 		return "current"
 	}

@@ -1,0 +1,23 @@
+[package]
+name = "turbovec-vecrunner"
+description = "The turbovec quantizing index, measured by kura-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+benchrs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# Pinned exactly, like every engine in this suite. A benchmark that says
+# "turbovec 1" and silently picked up whatever 1.x resolved that morning is not
+# a number anybody can reproduce, and the scheduled workflow is what tells us a
+# newer one exists.
+turbovec = "=1.0.0"
+
+# Only to pin the pool the engine searches on, so that one query is one core
+# here the same way it is for every other engine in the report.
+rayon = "1.12"

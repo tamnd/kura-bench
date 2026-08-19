@@ -25,12 +25,14 @@ type Engine struct {
 	Suite    string `json:"suite"`
 	Language string `json:"language"`
 
-	// Registry is where the latest version comes from: gomod, crate, or ours
-	// for an engine of our own that is pinned to a commit and has nothing to
-	// be behind.
+	// Registry is where the latest version comes from: gomod, crate, ours for
+	// an engine of our own that is pinned to a commit and has nothing to be
+	// behind, or none for one that is written out in this repository and has no
+	// dependency to track at all.
 	Registry string `json:"registry"`
 
-	// Package is the module path or the crate name.
+	// Package is the module path or the crate name, empty when the registry is
+	// none.
 	Package string `json:"package"`
 
 	Source string `json:"source"`
@@ -126,6 +128,12 @@ func check(ctx context.Context, client *http.Client, e Engine, repo Repo) Status
 		// freshness signal, it is noise.
 		s.Pinned, s.Err = PinnedGoMod(repo.GoMod, e.Package)
 		s.Latest = s.Pinned
+
+	case "none":
+		// The engine is the few hundred lines in this repository that implement
+		// it. There is no dependency underneath it, so there is nothing that can
+		// go stale, and saying so is more useful than leaving it out of the
+		// table and letting somebody wonder whether it was forgotten.
 
 	default:
 		s.Err = fmt.Errorf("%s: unknown registry %q", e.Name, e.Registry)

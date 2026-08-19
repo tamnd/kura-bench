@@ -134,6 +134,64 @@ jobs:
           name: smoke-results
           path: results/
 
+  # The same thing for the vector suite, on siftsmall.
+  #
+  # Five megabytes of real descriptors with the ground truth the people who
+  # published them computed, which is small enough to fetch and run on every
+  # pull request and is still a real measurement. The exact scan is the check
+  # that matters: it has to come back at recall 1.0000 against that published
+  # ground truth, and anything else means the harness is reading the files
+  # wrongly and every other figure it has ever printed is wrong the same way.
+  #
+  # Both metrics run because they exercise different code. Euclidean uses the
+  # published ground truth and covers hnsw, inner product is computed and cached
+  # here and covers turbovec, which ranks by inner product and nothing else.
+  vector-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runners/rust
+      - name: build everything
+        run: make build
+      - name: fetch siftsmall
+        run: ./bin/kura-vectors -dataset siftsmall -out vecdata
+      - name: compute the inner product ground truth
+        run: ./bin/kura-vectors -dataset siftsmall -metric inner-product -out vecdata
+      - name: euclidean
+        run: >
+          ./bin/kura-vecbench -dataset siftsmall -metric euclidean
+          -data vecdata -bin bin -out results -queries 100
+          -engines exact,hnsw
+      # The one figure in this suite that has a known right answer, so it is
+      # asserted rather than printed and left for somebody to notice.
+      - name: the exact scan agrees with the published ground truth
+        run: |
+          recall=$(jq '.search.points[0].recall' results/vec-exact-siftsmall-euclidean-*.json)
+          echo "the exact scan scored $recall"
+          if [ "$recall" != "1" ]; then
+            echo "it has to be 1, so the dataset is being read wrongly and every other figure is wrong the same way"
+            exit 1
+          fi
+      - name: inner product
+        run: >
+          ./bin/kura-vecbench -dataset siftsmall -metric inner-product
+          -data vecdata -bin bin -out results -queries 100
+          -engines exact,turbovec
+      - name: show the reports
+        run: cat results/vector-report-*.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vector-smoke-results
+          path: results/
+
   # golangci-lint bundles staticcheck, govet, ineffassign, errcheck, unused and
   # more, so it is the main quality gate.
   lint:

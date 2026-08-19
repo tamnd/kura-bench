@@ -202,13 +202,20 @@ func TestTheManifestInTheRepositoryParses(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, e := range m.Engines {
-		if e.Name == "" || e.Package == "" || e.Suite == "" || e.Source == "" {
+		if e.Name == "" || e.Suite == "" || e.Source == "" {
 			t.Errorf("%+v is missing a field", e)
 		}
 		switch e.Registry {
 		case "gomod", "crate", "ours":
+			// Everything with a registry behind it has to say what to look up
+			// there, since an empty package is a lookup of nothing that would
+			// report as an error every week until somebody noticed.
+			if e.Package == "" {
+				t.Errorf("%s is in a registry but names no package", e.Name)
+			}
+		case "none":
 		default:
-			t.Errorf("%s has registry %q, want gomod, crate or ours", e.Name, e.Registry)
+			t.Errorf("%s has registry %q, want gomod, crate, ours or none", e.Name, e.Registry)
 		}
 		if seen[e.Name] {
 			t.Errorf("%s is in the manifest twice", e.Name)

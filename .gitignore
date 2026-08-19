@@ -7,6 +7,10 @@
 *.jsonl
 /work/
 
+# The vector datasets, which are half a gigabyte for SIFT and four for GIST and
+# are fetched by kura-vectors from the addresses pinned in vectors/dataset.go.
+/vecdata/
+
 # Results are committed on purpose, so results/ is deliberately not ignored.
 
 # Rust build output.

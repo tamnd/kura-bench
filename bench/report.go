@@ -58,15 +58,19 @@ func writeMachine(b *strings.Builder, m Machine) {
 	fmt.Fprintf(b, "## Machine\n\n")
 	fmt.Fprintf(b, "%s, %s/%s, %s, %d cores, %s of memory.\n",
 		m.Host, m.OS, m.Arch, m.CPU, m.Cores, mb(m.MemoryBytes))
-	if m.Dedicated {
-		fmt.Fprintf(b, "Load before the run was %.2f and %s was free, so the machine was idle.\n",
-			m.LoadBefore, mb(m.MemoryFreeBytes))
-	} else {
-		fmt.Fprintf(b, "Load before the run was %.2f and %s was free, so the machine was doing other work and these numbers are a floor rather than a measurement.\n",
-			m.LoadBefore, mb(m.MemoryFreeBytes))
+	// macOS has no single counter for available memory that is worth the
+	// arithmetic to assemble, so it is left at zero there. Printing that as
+	// "none was free" would be a claim about a machine with twenty four
+	// gigabytes in it, so the clause is dropped when the figure is not known.
+	free := ""
+	if m.MemoryFreeBytes > 0 {
+		free = " and " + mb(m.MemoryFreeBytes) + " was free"
 	}
-	if m.DedicatedComment != "" {
-		fmt.Fprintf(b, "%s\n", m.DedicatedComment)
+	if m.Dedicated {
+		fmt.Fprintf(b, "Load before the run was %.2f%s, so the machine was idle.\n", m.LoadBefore, free)
+	} else {
+		fmt.Fprintf(b, "Load before the run was %.2f%s, so the machine was doing other work and these numbers are a floor rather than a measurement.\n",
+			m.LoadBefore, free)
 	}
 	b.WriteString("\n")
 }
