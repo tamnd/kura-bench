@@ -11,6 +11,7 @@ use serde::Serialize;
 use crate::machine::Machine;
 use crate::result::{ConcurrentStat, OpenPhase, percentile};
 use crate::usage::Usage;
+use crate::vector::config::Config;
 
 #[derive(Serialize, Default)]
 pub struct VectorResult {
@@ -24,6 +25,28 @@ pub struct VectorResult {
     pub machine: Machine,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub notes: String,
+
+    /// Why this engine will not answer the run it was given, in its own words.
+    ///
+    /// Empty for a run that went ahead, which is every run an engine is asked
+    /// something it does. The alternative to saying it in the result was
+    /// exiting, and an engine that exits is dropped from the report, which
+    /// reads as though nobody had thought to measure it.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub declined: String,
+}
+
+/// Fills in the result of an engine that will not answer this run.
+///
+/// The dataset name and the metric come from the flags rather than from the
+/// files, because the point of declining is that the files were never read.
+/// They are still worth carrying: they are what the report is filed under, and
+/// a refusal that did not say which metric it was refusing would need the run
+/// to be reconstructed to be read.
+pub fn decline(cfg: &Config, res: &mut VectorResult, why: String) {
+    res.declined = why;
+    res.dataset.name = cfg.dataset.clone();
+    res.dataset.metric = cfg.metric.clone();
 }
 
 #[derive(Serialize, Default)]

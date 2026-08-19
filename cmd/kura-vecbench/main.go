@@ -157,6 +157,9 @@ func run(cfg config) error {
 		if res.Incomplete != "" {
 			fmt.Fprintf(os.Stderr, "%s: %s, keeping what it did measure\n", r.name, res.Incomplete)
 		}
+		if res.Declined != "" {
+			fmt.Fprintf(os.Stderr, "%s: %s, so it is in the report without numbers\n", r.name, res.Declined)
+		}
 		results = append(results, res)
 
 		name := filepath.Join(cfg.out, "vec-"+r.name+"-"+cfg.slug(res.Machine.Host)+".json")
@@ -197,6 +200,11 @@ func measure(cfg config, r runnerBin, work string) (bench.VectorResult, error) {
 			return incomplete(cfg, r, bench.VectorResult{}, late), nil
 		}
 		return bench.VectorResult{}, fmt.Errorf("build phase: %w", err)
+	}
+	// An engine that will not answer this metric said so instead of building,
+	// and there is nothing for the query phase to open. It keeps its row.
+	if build.Declined != "" {
+		return build, nil
 	}
 	query, err := invoke(cfg, r, work, "query")
 	if err != nil {
@@ -284,11 +292,16 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.VectorResult, er
 		}
 		return bench.VectorResult{}, err
 	}
-	fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, time.Since(start).Round(time.Second))
+	elapsed := time.Since(start).Round(time.Second)
 
 	var res bench.VectorResult
 	if err := json.Unmarshal(lastLine(stdout.Bytes()), &res); err != nil {
 		return bench.VectorResult{}, fmt.Errorf("the runner did not write a result: %w", err)
+	}
+	// An engine that refused the run did no work, and timing the refusal reads
+	// as a build that finished in no time at all.
+	if res.Declined == "" {
+		fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, elapsed)
 	}
 	return res, nil
 }

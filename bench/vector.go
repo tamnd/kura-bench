@@ -51,6 +51,18 @@ type VectorResult struct {
 	// is empty for a run that finished. See [GraphResult.Incomplete] for why an
 	// engine that ran out of time stays in the report.
 	Incomplete string `json:"incomplete,omitempty"`
+
+	// Declined says the engine was asked for something it does not do and said
+	// so, which is the runner's own words rather than the orchestrator's guess.
+	//
+	// A vector run picks one metric and some engines rank by one metric only,
+	// so a sweep over all three asks every engine two questions it cannot
+	// answer. The runner refusing is right: ranking by inner product against
+	// Euclidean ground truth would produce a full set of plausible timings
+	// attached to a recall figure that means nothing. What was wrong was the
+	// run then dropping the engine, which left a report that reads as though
+	// nobody had thought to measure it.
+	Declined string `json:"declined,omitempty"`
 }
 
 // built says the build phase produced a measurement, which is not the same as
@@ -289,11 +301,7 @@ func MergeVector(build, query VectorResult) VectorResult {
 	if query.Dataset.Metric != "" {
 		out.Dataset.Metric = query.Dataset.Metric
 	}
-	// Two notes are two sentences that were never written to sit together, so
-	// they are joined with something that keeps them apart on the page.
-	if query.Notes != "" {
-		out.Notes = strings.TrimSpace(strings.Trim(out.Notes+"; "+query.Notes, "; "))
-	}
+	out.Notes = joinNotes(build.Notes, query.Notes)
 	return out
 }
 
@@ -355,7 +363,7 @@ func writeHeadline(b *strings.Builder, rs []VectorResult) {
 		// that has no numbers for it says so here rather than being absent. Not
 		// reached would be a claim about a curve that was never measured.
 		if !r.searched() {
-			fmt.Fprintf(b, "| %s | %s | %s | | | |\n", r.Engine, r.Version, missing(r.Incomplete))
+			fmt.Fprintf(b, "| %s | %s | %s | | | |\n", r.Engine, r.Version, missingBecause(r.Declined, r.Incomplete))
 			continue
 		}
 		lo, loOK := r.At(0.90)
@@ -447,7 +455,7 @@ func writeCurve(b *strings.Builder, rs []VectorResult) {
 
 	for _, r := range rs {
 		if !r.searched() {
-			fmt.Fprintf(b, "| %s | | %s | | | | |", r.Engine, missing(r.Incomplete))
+			fmt.Fprintf(b, "| %s | | %s | | | | |", r.Engine, missingBecause(r.Declined, r.Incomplete))
 			if perPoint {
 				b.WriteString(" | |")
 			}
@@ -494,7 +502,7 @@ func pointBuild(p VectorPoint) string {
 func writeVectorNotes(b *strings.Builder, rs []VectorResult) {
 	var lines []string
 	for _, r := range rs {
-		if note := noteFor(r.Notes, r.Incomplete); note != "" {
+		if note := noteBecause(r.Notes, r.Declined, r.Incomplete); note != "" {
 			lines = append(lines, fmt.Sprintf("- %s: %s", r.Engine, note))
 		}
 	}

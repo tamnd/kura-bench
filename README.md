@@ -62,6 +62,7 @@ The metric is a first class part of a result and not a footnote.
 A quantizing index built for maximum inner product, scored against Euclidean ground truth, comes back at about a tenth and looks like a bad index.
 It is not a bad index, it is answering a different question.
 Every runner is told which metric the run is under and refuses the run if it cannot answer that one, so a mismatch is an error rather than a number.
+A runner that refuses still keeps its row in the report, which says it declined and why, because an engine that was asked and would not answer is a different thing from one nobody thought to measure.
 
 ## What is measured, in the graph suite
 
@@ -217,7 +218,7 @@ The dataset and the metric are in the name because three runs of the same engine
 
 Useful flags:
 
-- `-metric euclidean|cosine|inner-product` picks what nearest means, and an engine that cannot answer that question refuses the run instead of reporting a meaningless recall.
+- `-metric euclidean|cosine|inner-product` picks what nearest means, and an engine that cannot answer that question declines the run instead of reporting a meaningless recall, which the report says next to its name.
 - `-engines exact,hnsw` runs a subset.
 - `-k 10` is how many neighbours are asked for and the depth recall is scored at.
 - `-limit 100000` indexes part of the base set, which is how a shared machine gets a run that finishes. Recall then becomes a lower bound, because the ground truth still covers the whole set, and the report says so.

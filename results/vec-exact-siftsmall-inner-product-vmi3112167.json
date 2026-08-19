@@ -1,0 +1,78 @@
+{
+  "engine": "exact",
+  "version": "0.1.0",
+  "language": "rust",
+  "dataset": {
+    "name": "siftsmall",
+    "dim": 128,
+    "vectors": 10000,
+    "queries": 100,
+    "k": 10,
+    "metric": "inner-product"
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 0.024516694,
+      "user_seconds": 0.005802,
+      "sys_seconds": 0.018424,
+      "peak_rss_bytes": 12476416,
+      "rss_bytes": 8523776,
+      "read_bytes": 0,
+      "write_bytes": 5124096
+    },
+    "bytes": 5120016,
+    "files": 1
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.018959717,
+      "user_seconds": 0.0019119999999999999,
+      "sys_seconds": 0.017093999999999998,
+      "peak_rss_bytes": 13500416,
+      "rss_bytes": 7589888,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 7589888
+  },
+  "search": {
+    "usage": {
+      "wall_seconds": 0.182433947,
+      "user_seconds": 0.279115,
+      "sys_seconds": 0.007056000000000003,
+      "peak_rss_bytes": 13500416,
+      "rss_bytes": 7954432,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "points": [
+      {
+        "recall": 1,
+        "queries": 100,
+        "min_ms": 1.107452,
+        "median_ms": 1.196042,
+        "p90_ms": 1.3406900000000002,
+        "p99_ms": 1.4686949999999999,
+        "max_ms": 2.7420940000000003,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.057866137,
+          "median_ms": 1.202634,
+          "p99_ms": 12.722244
+        }
+      }
+    ]
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "x86_64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 8.22,
+    "memory_free_bytes": 8056926208,
+    "dedicated": false
+  }
+}
