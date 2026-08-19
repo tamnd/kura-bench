@@ -12,36 +12,36 @@
   },
   "build": {
     "usage": {
-      "wall_seconds": 0.926031289,
-      "user_seconds": 0.7824279999999999,
-      "sys_seconds": 0.062779,
-      "peak_rss_bytes": 15777792,
-      "rss_bytes": 16244736,
+      "wall_seconds": 0.799007936,
+      "user_seconds": 0.6402680000000001,
+      "sys_seconds": 0.037033,
+      "peak_rss_bytes": 15646720,
+      "rss_bytes": 15929344,
       "read_bytes": 0,
       "write_bytes": 2158592
     },
-    "bytes": 2145382,
+    "bytes": 2145381,
     "files": 4
   },
   "open": {
     "usage": {
-      "wall_seconds": 0.135027534,
-      "user_seconds": 0.127885,
-      "sys_seconds": 0.004928,
-      "peak_rss_bytes": 3932160,
-      "rss_bytes": 4153344,
+      "wall_seconds": 0.420224854,
+      "user_seconds": 0.35259100000000004,
+      "sys_seconds": 0.0485,
+      "peak_rss_bytes": 4194304,
+      "rss_bytes": 4284416,
       "read_bytes": 0,
       "write_bytes": 0
     },
-    "resident_bytes": 4153344
+    "resident_bytes": 4284416
   },
   "search": {
     "usage": {
-      "wall_seconds": 1.388491071,
-      "user_seconds": 1.4248210000000001,
-      "sys_seconds": 0.0325,
-      "peak_rss_bytes": 4718592,
-      "rss_bytes": 5251072,
+      "wall_seconds": 1.134776227,
+      "user_seconds": 1.0877970000000001,
+      "sys_seconds": 0.052243,
+      "peak_rss_bytes": 5111808,
+      "rss_bytes": 5382144,
       "read_bytes": 0,
       "write_bytes": 0
     },
@@ -50,58 +50,58 @@
         "params": "bits=2",
         "recall": 0.702,
         "queries": 100,
-        "min_ms": 0.103869,
-        "median_ms": 0.132514,
-        "p90_ms": 0.155007,
-        "p99_ms": 3.2458080000000002,
-        "max_ms": 3.284663,
+        "min_ms": 0.10247200000000001,
+        "median_ms": 0.12186899999999999,
+        "p90_ms": 0.14938,
+        "p99_ms": 0.169748,
+        "max_ms": 0.21413000000000001,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.02155226,
-          "median_ms": 0.138194,
-          "p99_ms": 7.220784
+          "seconds": 0.015286933,
+          "median_ms": 0.126367,
+          "p99_ms": 2.120551
         },
         "bytes": 457027,
-        "build_seconds": 0.183355779
+        "build_seconds": 0.226279137
       },
       {
         "params": "bits=3",
         "recall": 0.855,
         "queries": 100,
-        "min_ms": 0.173141,
-        "median_ms": 0.210373,
-        "p90_ms": 0.227256,
-        "p99_ms": 0.399696,
-        "max_ms": 0.412199,
+        "min_ms": 0.174236,
+        "median_ms": 0.238366,
+        "p90_ms": 0.296445,
+        "p99_ms": 1.287331,
+        "max_ms": 2.2943059999999997,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.038961362,
-          "median_ms": 0.222046,
-          "p99_ms": 6.844762
+          "seconds": 0.016142445,
+          "median_ms": 0.248505,
+          "p99_ms": 9.615184000000001
         },
         "bytes": 844067,
-        "build_seconds": 0.321328708
+        "build_seconds": 0.265489502
       },
       {
         "params": "bits=4",
         "recall": 0.898,
         "queries": 100,
-        "min_ms": 0.171568,
-        "median_ms": 0.201345,
-        "p90_ms": 0.280729,
-        "p99_ms": 0.368276,
-        "max_ms": 0.430987,
+        "min_ms": 0.190476,
+        "median_ms": 0.21803799999999998,
+        "p90_ms": 0.254627,
+        "p99_ms": 0.39143300000000003,
+        "max_ms": 0.47779499999999997,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.159209285,
-          "median_ms": 0.209811,
-          "p99_ms": 88.708446
+          "seconds": 0.025228739,
+          "median_ms": 0.228017,
+          "p99_ms": 13.510517
         },
         "bytes": 844131,
-        "build_seconds": 0.397349204
+        "build_seconds": 0.28662053
       }
     ]
   },
@@ -112,8 +112,8 @@
     "cpu": "AMD EPYC Processor (with IBPB)",
     "cores": 6,
     "memory_bytes": 12541493248,
-    "load_before": 8.22,
-    "memory_free_bytes": 8054845440,
+    "load_before": 11.46,
+    "memory_free_bytes": 7251218432,
     "dedicated": false
   },
   "notes": "the build figures cover all 3 indexes together, one per bit width, since that is what the run cost; the per width cost is in the curve; the engine was held to one thread so that a serial query is one query on one core, as it is for every other engine here; the cold start is the bits=2 index, the first of the three loaded"

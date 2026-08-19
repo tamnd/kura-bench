@@ -12,140 +12,140 @@
   },
   "build": {
     "usage": {
-      "wall_seconds": 7.221318431,
-      "user_seconds": 19.174049,
-      "sys_seconds": 1.1139620000000001,
-      "peak_rss_bytes": 35434496,
-      "rss_bytes": 35766272,
+      "wall_seconds": 10.503239977,
+      "user_seconds": 23.588692,
+      "sys_seconds": 1.139776,
+      "peak_rss_bytes": 34648064,
+      "rss_bytes": 35078144,
       "read_bytes": 0,
-      "write_bytes": 10711040
+      "write_bytes": 10530816
     },
-    "bytes": 10708108,
+    "bytes": 10526616,
     "files": 2
   },
   "open": {
     "usage": {
-      "wall_seconds": 0.167372853,
-      "user_seconds": 0.106494,
-      "sys_seconds": 0.059835,
-      "peak_rss_bytes": 38928384,
-      "rss_bytes": 39112704,
+      "wall_seconds": 0.441564632,
+      "user_seconds": 0.161016,
+      "sys_seconds": 0.078683,
+      "peak_rss_bytes": 38010880,
+      "rss_bytes": 38105088,
       "read_bytes": 0,
       "write_bytes": 0
     },
-    "resident_bytes": 39112704
+    "resident_bytes": 38105088
   },
   "search": {
     "usage": {
-      "wall_seconds": 1.484636163,
-      "user_seconds": 1.955688,
-      "sys_seconds": 0.03655099999999999,
-      "peak_rss_bytes": 40108032,
-      "rss_bytes": 40706048,
+      "wall_seconds": 1.878780829,
+      "user_seconds": 1.7421159999999998,
+      "sys_seconds": 0.043761999999999995,
+      "peak_rss_bytes": 39321600,
+      "rss_bytes": 39641088,
       "read_bytes": 0,
       "write_bytes": 0
     },
     "points": [
       {
         "params": "ef=16",
-        "recall": 0.964,
+        "recall": 0.947,
         "queries": 100,
-        "min_ms": 0.08909,
-        "median_ms": 0.215553,
-        "p90_ms": 0.28296099999999996,
-        "p99_ms": 0.486533,
-        "max_ms": 0.571515,
+        "min_ms": 0.093365,
+        "median_ms": 0.203401,
+        "p90_ms": 0.292318,
+        "p99_ms": 3.4113770000000003,
+        "max_ms": 5.356709,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.014772996,
-          "median_ms": 0.206576,
-          "p99_ms": 2.386603
+          "seconds": 0.026530248,
+          "median_ms": 0.229831,
+          "p99_ms": 10.32345
         }
       },
       {
         "params": "ef=32",
-        "recall": 0.983,
+        "recall": 0.974,
         "queries": 100,
-        "min_ms": 0.145279,
-        "median_ms": 0.409174,
-        "p90_ms": 1.496668,
-        "p99_ms": 8.279615,
-        "max_ms": 55.211240000000004,
+        "min_ms": 0.126587,
+        "median_ms": 0.299099,
+        "p90_ms": 0.437579,
+        "p99_ms": 0.5932310000000001,
+        "max_ms": 3.6600040000000003,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.0221334,
-          "median_ms": 0.34445,
-          "p99_ms": 9.658417
+          "seconds": 0.028695553,
+          "median_ms": 0.355816,
+          "p99_ms": 6.582986
         }
       },
       {
         "params": "ef=64",
-        "recall": 0.988,
+        "recall": 0.981,
         "queries": 100,
-        "min_ms": 0.310795,
-        "median_ms": 0.6514679999999999,
-        "p90_ms": 2.531561,
-        "p99_ms": 6.244524,
-        "max_ms": 17.460696000000002,
+        "min_ms": 0.273312,
+        "median_ms": 0.649216,
+        "p90_ms": 6.784714,
+        "p99_ms": 11.718983,
+        "max_ms": 15.176488,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.028975209,
-          "median_ms": 0.602495,
-          "p99_ms": 12.149259
+          "seconds": 0.059537963,
+          "median_ms": 0.644938,
+          "p99_ms": 16.678479
         }
       },
       {
         "params": "ef=128",
-        "recall": 0.99,
+        "recall": 0.987,
         "queries": 100,
-        "min_ms": 0.46257600000000004,
-        "median_ms": 1.0046460000000002,
-        "p90_ms": 3.170846,
-        "p99_ms": 5.528133,
-        "max_ms": 5.535726,
+        "min_ms": 0.5073700000000001,
+        "median_ms": 1.146256,
+        "p90_ms": 6.9177539999999995,
+        "p99_ms": 14.367543,
+        "max_ms": 14.544813999999999,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.062054992,
-          "median_ms": 1.077635,
-          "p99_ms": 31.330551999999997
+          "seconds": 0.06726972,
+          "median_ms": 1.079541,
+          "p99_ms": 31.311398999999998
         }
       },
       {
         "params": "ef=256",
-        "recall": 0.99,
+        "recall": 0.989,
         "queries": 100,
-        "min_ms": 0.8522430000000001,
-        "median_ms": 1.64425,
-        "p90_ms": 2.135441,
-        "p99_ms": 16.882308,
-        "max_ms": 23.193960999999998,
+        "min_ms": 1.041741,
+        "median_ms": 2.2582280000000003,
+        "p90_ms": 4.219180000000001,
+        "p99_ms": 7.073805,
+        "max_ms": 7.6087180000000005,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.067698085,
-          "median_ms": 1.716279,
-          "p99_ms": 27.685919
+          "seconds": 0.177370119,
+          "median_ms": 3.873614,
+          "p99_ms": 55.569292
         }
       },
       {
         "params": "ef=512",
         "recall": 0.99,
         "queries": 100,
-        "min_ms": 1.960236,
-        "median_ms": 2.827577,
-        "p90_ms": 3.510456,
-        "p99_ms": 8.751309000000001,
-        "max_ms": 23.979786999999998,
+        "min_ms": 2.042635,
+        "median_ms": 3.3605620000000003,
+        "p90_ms": 12.329247,
+        "p99_ms": 23.888661,
+        "max_ms": 26.320182000000003,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.337116118,
-          "median_ms": 11.933544000000001,
-          "p99_ms": 74.871982
+          "seconds": 0.128405945,
+          "median_ms": 5.507452000000001,
+          "p99_ms": 35.996241
         }
       }
     ]
@@ -157,8 +157,8 @@
     "cpu": "AMD EPYC Processor (with IBPB)",
     "cores": 6,
     "memory_bytes": 12541493248,
-    "load_before": 7.94,
-    "memory_free_bytes": 8090279936,
+    "load_before": 11.62,
+    "memory_free_bytes": 7324549120,
     "dedicated": false
   },
   "notes": "built with 16 connections per node and an ef of 200, which are the defaults the library is usually run at rather than settings picked for this run"

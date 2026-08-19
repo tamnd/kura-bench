@@ -12,11 +12,11 @@
   },
   "build": {
     "usage": {
-      "wall_seconds": 0.158192015,
-      "user_seconds": 0.043271,
-      "sys_seconds": 0.114566,
-      "peak_rss_bytes": 12476416,
-      "rss_bytes": 8536064,
+      "wall_seconds": 0.07548087,
+      "user_seconds": 0.014177,
+      "sys_seconds": 0.05774599999999999,
+      "peak_rss_bytes": 12472320,
+      "rss_bytes": 8519680,
       "read_bytes": 0,
       "write_bytes": 5124096
     },
@@ -25,23 +25,23 @@
   },
   "open": {
     "usage": {
-      "wall_seconds": 0.03748315,
-      "user_seconds": 0.007857,
-      "sys_seconds": 0.029375000000000002,
+      "wall_seconds": 0.016579543,
+      "user_seconds": 0.003714,
+      "sys_seconds": 0.011225,
       "peak_rss_bytes": 13500416,
-      "rss_bytes": 7577600,
+      "rss_bytes": 7593984,
       "read_bytes": 0,
       "write_bytes": 0
     },
-    "resident_bytes": 7577600
+    "resident_bytes": 7593984
   },
   "search": {
     "usage": {
-      "wall_seconds": 0.40505584,
-      "user_seconds": 0.451549,
-      "sys_seconds": 0.032056999999999995,
+      "wall_seconds": 0.173549696,
+      "user_seconds": 0.21633899999999998,
+      "sys_seconds": 0.0017590000000000001,
       "peak_rss_bytes": 13500416,
-      "rss_bytes": 7942144,
+      "rss_bytes": 7954432,
       "read_bytes": 0,
       "write_bytes": 0
     },
@@ -49,17 +49,17 @@
       {
         "recall": 1,
         "queries": 100,
-        "min_ms": 0.593679,
-        "median_ms": 1.1430719999999999,
-        "p90_ms": 7.168578999999999,
-        "p99_ms": 54.270275,
-        "max_ms": 55.656404,
+        "min_ms": 0.6633509999999999,
+        "median_ms": 1.048996,
+        "p90_ms": 1.590689,
+        "p99_ms": 4.006675,
+        "max_ms": 4.2594080000000005,
         "concurrent": {
           "workers": 6,
           "queries": 100,
-          "seconds": 0.072358036,
-          "median_ms": 1.594608,
-          "p99_ms": 14.366665000000001
+          "seconds": 0.051261599,
+          "median_ms": 0.9795050000000001,
+          "p99_ms": 7.802825
         }
       }
     ]
@@ -71,8 +71,8 @@
     "cpu": "AMD EPYC Processor (with IBPB)",
     "cores": 6,
     "memory_bytes": 12541493248,
-    "load_before": 8.11,
-    "memory_free_bytes": 8103051264,
+    "load_before": 10.74,
+    "memory_free_bytes": 7357972480,
     "dedicated": false
   }
 }
