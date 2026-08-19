@@ -1,0 +1,210 @@
+{
+  "engine": "bleve",
+  "version": "v2.6.0",
+  "language": "go",
+  "corpus": {
+    "documents": 82791,
+    "bytes": 486518873
+  },
+  "index": {
+    "usage": {
+      "wall_seconds": 139.995722258,
+      "user_seconds": 142.991498,
+      "sys_seconds": 45.103676,
+      "peak_rss_bytes": 526675968,
+      "rss_bytes": 122007552,
+      "read_bytes": 467410944,
+      "write_bytes": 887451648
+    },
+    "bytes": 310309611,
+    "files": 17
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.026028839,
+      "user_seconds": 0.014923,
+      "sys_seconds": 0.031156,
+      "peak_rss_bytes": 34996224,
+      "rss_bytes": 35532800,
+      "read_bytes": 151552,
+      "write_bytes": 6823936
+    },
+    "resident_bytes": 35532800
+  },
+  "search": {
+    "usage": {
+      "wall_seconds": 3.875762705,
+      "user_seconds": 4.535378,
+      "sys_seconds": 0.95905,
+      "peak_rss_bytes": 89616384,
+      "rss_bytes": 54743040,
+      "read_bytes": 0,
+      "write_bytes": 18243584
+    },
+    "queries": [
+      {
+        "query": "memory allocation",
+        "hits": 4753,
+        "runs": 20,
+        "min_ms": 2.435963,
+        "median_ms": 3.478562,
+        "p90_ms": 11.626075,
+        "p99_ms": 13.231231,
+        "max_ms": 13.231231
+      },
+      {
+        "query": "return value",
+        "hits": 33001,
+        "runs": 20,
+        "min_ms": 12.656866,
+        "median_ms": 23.936444,
+        "p90_ms": 46.435079,
+        "p99_ms": 67.508156,
+        "max_ms": 67.508156
+      },
+      {
+        "query": "error handling",
+        "hits": 31005,
+        "runs": 20,
+        "min_ms": 11.109836,
+        "median_ms": 27.928708,
+        "p90_ms": 45.250475,
+        "p99_ms": 122.941676,
+        "max_ms": 122.941676
+      },
+      {
+        "query": "deadlock detection",
+        "hits": 804,
+        "runs": 20,
+        "min_ms": 0.724507,
+        "median_ms": 1.21402,
+        "p90_ms": 3.215409,
+        "p99_ms": 8.187245,
+        "max_ms": 8.187245
+      },
+      {
+        "query": "reference counting",
+        "hits": 4317,
+        "runs": 20,
+        "min_ms": 1.964534,
+        "median_ms": 5.418182,
+        "p90_ms": 12.804925,
+        "p99_ms": 17.078081,
+        "max_ms": 17.078081
+      },
+      {
+        "query": "buffer overflow check",
+        "hits": 19605,
+        "runs": 20,
+        "min_ms": 8.21746,
+        "median_ms": 13.218619,
+        "p90_ms": 51.501084,
+        "p99_ms": 56.621549,
+        "max_ms": 56.621549
+      },
+      {
+        "query": "thread pool shutdown",
+        "hits": 3765,
+        "runs": 20,
+        "min_ms": 1.927937,
+        "median_ms": 4.20248,
+        "p90_ms": 10.050646,
+        "p99_ms": 15.861797,
+        "max_ms": 15.861797
+      },
+      {
+        "query": "mmap_region",
+        "hits": 1380,
+        "runs": 20,
+        "min_ms": 0.735617,
+        "median_ms": 1.396619,
+        "p90_ms": 9.127152,
+        "p99_ms": 35.736252,
+        "max_ms": 35.736252
+      },
+      {
+        "query": "kasan",
+        "hits": 9,
+        "runs": 20,
+        "min_ms": 0.279743,
+        "median_ms": 0.622603,
+        "p90_ms": 3.440485,
+        "p99_ms": 6.67005,
+        "max_ms": 6.67005
+      },
+      {
+        "query": "tsan_atomic",
+        "hits": 2399,
+        "runs": 20,
+        "min_ms": 1.040047,
+        "median_ms": 1.320952,
+        "p90_ms": 4.770394,
+        "p99_ms": 7.089317,
+        "max_ms": 7.089317
+      },
+      {
+        "query": "backwards compatibility guarantee",
+        "hits": 2470,
+        "runs": 20,
+        "min_ms": 1.298362,
+        "median_ms": 1.426292,
+        "p90_ms": 1.998645,
+        "p99_ms": 6.545085,
+        "max_ms": 6.545085
+      },
+      {
+        "query": "deprecated in favour of",
+        "hits": 53301,
+        "runs": 20,
+        "min_ms": 25.63687,
+        "median_ms": 29.213069,
+        "p90_ms": 56.284637,
+        "p99_ms": 220.514389,
+        "max_ms": 220.514389
+      },
+      {
+        "query": "the",
+        "hits": 51086,
+        "runs": 20,
+        "min_ms": 15.704668,
+        "median_ms": 17.908272,
+        "p90_ms": 27.374686,
+        "p99_ms": 37.132889,
+        "max_ms": 37.132889
+      }
+    ],
+    "concurrent": {
+      "workers": 13,
+      "queries": 260,
+      "seconds": 3.693995256,
+      "median_ms": 87.590361,
+      "p99_ms": 1031.539307
+    }
+  },
+  "update": {
+    "usage": {
+      "wall_seconds": 10.687065982,
+      "user_seconds": 10.943215,
+      "sys_seconds": 4.481526,
+      "peak_rss_bytes": 259997696,
+      "rss_bytes": 179875840,
+      "read_bytes": 49283072,
+      "write_bytes": 52854784
+    },
+    "documents": 5000,
+    "bytes": 42053514,
+    "index_bytes_after": 338527676
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "amd64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 9.29,
+    "memory_free_bytes": 6725193728,
+    "dedicated": false
+  },
+  "notes": "measured with its segment library held at zapx v17.1.9, which is newer than this release of bleve asks for, because the version it asks for cannot read back the postings of a term that appears in more than a thousand documents"
+}
