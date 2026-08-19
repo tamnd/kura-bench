@@ -155,9 +155,10 @@ func Fetch(ctx context.Context, s Source, root string, log func(string, ...any))
 		return "", err
 	}
 	if at != s.Commit {
-		// This should be impossible, and it is checked anyway. A corpus built
-		// from the wrong revision produces numbers that look fine and are not
-		// comparable with anybody else's, which is the worst kind of wrong.
+		// This has already caught one real mistake, which is three tags pinned
+		// to the tag object instead of to the commit. A corpus built from the
+		// wrong revision produces numbers that look fine and are not comparable
+		// with anybody else's, which is the worst kind of wrong.
 		return "", fmt.Errorf("corpus: %s checked out %s, wanted %s", s.Name, at, s.Commit)
 	}
 	return dir, nil
