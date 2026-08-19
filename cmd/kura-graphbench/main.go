@@ -41,25 +41,27 @@ import (
 
 func main() {
 	var (
-		name    = flag.String("dataset", "ca-grqc", "graph to run, one of "+strings.Join(graphs.Names(), " "))
-		data    = flag.String("data", "graphdata", "directory the graphs live in, as written by kura-graphs")
-		out     = flag.String("out", "results", "directory the results and the report are written to")
-		work    = flag.String("work", "", "directory the stores are built in, defaults to a temporary one")
-		binDir  = flag.String("bin", "bin", "directory holding the runner binaries")
-		engines = flag.String("engines", "", "comma separated engines to run, empty for every runner found")
-		ops     = flag.String("ops", "", "comma separated operations to run, empty for all of "+strings.Join(graphs.Operations(), " "))
-		graph   = flag.String("graph", "", "run the graph in this directory instead of the one -data and -dataset name")
-		workers = flag.Int("workers", 0, "operations in flight for the throughput run, zero for one per core")
-		keep    = flag.Bool("keep", false, "leave the stores in place after the run")
+		name     = flag.String("dataset", "ca-grqc", "graph to run, one of "+strings.Join(graphs.Names(), " "))
+		data     = flag.String("data", "graphdata", "directory the graphs live in, as written by kura-graphs")
+		out      = flag.String("out", "results", "directory the results and the report are written to")
+		work     = flag.String("work", "", "directory the stores are built in, defaults to a temporary one")
+		binDir   = flag.String("bin", "bin", "directory holding the runner binaries")
+		engines  = flag.String("engines", "", "comma separated engines to run, empty for every runner found")
+		ops      = flag.String("ops", "", "comma separated operations to run, empty for all of "+strings.Join(graphs.Operations(), " "))
+		graph    = flag.String("graph", "", "run the graph in this directory instead of the one -data and -dataset name")
+		workers  = flag.Int("workers", 0, "operations in flight for the throughput run, zero for one per core")
+		deadline = flag.Duration("deadline", 0, "give up on a phase that runs longer than this, zero for no limit")
+		keep     = flag.Bool("keep", false, "leave the stores in place after the run")
 	)
 	flag.Parse()
 
 	cfg := config{
-		out:     *out,
-		work:    *work,
-		binDir:  *binDir,
-		workers: *workers,
-		keep:    *keep,
+		out:      *out,
+		work:     *work,
+		binDir:   *binDir,
+		workers:  *workers,
+		keep:     *keep,
+		deadline: *deadline,
 	}
 	// A named dataset is the usual case and a directory is the case where
 	// somebody prepared a subgraph. Either way what the rest of this reads is a
@@ -123,16 +125,17 @@ func chooseOps(list string) ([]string, error) {
 type config struct {
 	// dir holds edges.bin, seeds.bin and answers.json, and label is what the
 	// run is filed under.
-	dir     string
-	label   string
-	about   string
-	out     string
-	work    string
-	binDir  string
-	engines []string
-	ops     []string
-	workers int
-	keep    bool
+	dir      string
+	label    string
+	about    string
+	out      string
+	work     string
+	binDir   string
+	engines  []string
+	ops      []string
+	workers  int
+	keep     bool
+	deadline time.Duration
 }
 
 func run(cfg config) error {
@@ -242,15 +245,30 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.GraphResult, err
 	}
 
 	var stdout bytes.Buffer
-	// No deadline. A breadth first search over sixty nine million edges takes
-	// as long as it takes, and a timeout here would turn a slow engine into a
-	// missing row instead of a slow number.
-	cmd := exec.CommandContext(context.Background(), r.path, args...)
+	// No deadline by default. A breadth first search over sixty nine million
+	// edges takes as long as it takes, and a timeout would turn a slow engine
+	// into a missing row instead of a slow number, which is the opposite of
+	// what this is for.
+	//
+	// It is a flag because an engine that is merely slow and one that will
+	// never finish look identical from outside. Setting -deadline says how
+	// long the difference is worth waiting for, and the engine is then
+	// reported as having failed to finish rather than quietly left out.
+	ctx := context.Background()
+	if cfg.deadline > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.deadline)
+		defer cancel()
+	}
+	cmd := exec.CommandContext(ctx, r.path, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = os.Stderr
 
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return bench.GraphResult{}, fmt.Errorf("did not finish within %s", cfg.deadline)
+		}
 		return bench.GraphResult{}, err
 	}
 	fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, time.Since(start).Round(time.Second))

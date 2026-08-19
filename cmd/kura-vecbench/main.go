@@ -35,18 +35,19 @@ import (
 
 func main() {
 	var (
-		name    = flag.String("dataset", "sift", "dataset to run, one of "+strings.Join(vectors.Names(), " "))
-		metric  = flag.String("metric", "euclidean", "what nearest means, one of "+metricNames())
-		data    = flag.String("data", "vecdata", "directory the datasets live in, as written by kura-vectors")
-		out     = flag.String("out", "results", "directory the results and the report are written to")
-		work    = flag.String("work", "", "directory the indexes are built in, defaults to a temporary one")
-		binDir  = flag.String("bin", "bin", "directory holding the runner binaries")
-		engines = flag.String("engines", "", "comma separated engines to run, empty for every runner found")
-		k       = flag.Int("k", 10, "neighbours per query, and the depth recall is scored at")
-		limit   = flag.Int("limit", 0, "index only this many base vectors, zero for all of them")
-		queries = flag.Int("queries", 1000, "how many query vectors to use, zero for all of them")
-		workers = flag.Int("workers", 0, "queries in flight for the throughput run, zero for one per core")
-		keep    = flag.Bool("keep", false, "leave the indexes in place after the run")
+		name     = flag.String("dataset", "sift", "dataset to run, one of "+strings.Join(vectors.Names(), " "))
+		metric   = flag.String("metric", "euclidean", "what nearest means, one of "+metricNames())
+		data     = flag.String("data", "vecdata", "directory the datasets live in, as written by kura-vectors")
+		out      = flag.String("out", "results", "directory the results and the report are written to")
+		work     = flag.String("work", "", "directory the indexes are built in, defaults to a temporary one")
+		binDir   = flag.String("bin", "bin", "directory holding the runner binaries")
+		engines  = flag.String("engines", "", "comma separated engines to run, empty for every runner found")
+		k        = flag.Int("k", 10, "neighbours per query, and the depth recall is scored at")
+		limit    = flag.Int("limit", 0, "index only this many base vectors, zero for all of them")
+		queries  = flag.Int("queries", 1000, "how many query vectors to use, zero for all of them")
+		workers  = flag.Int("workers", 0, "queries in flight for the throughput run, zero for one per core")
+		deadline = flag.Duration("deadline", 0, "give up on a phase that runs longer than this, zero for no limit")
+		keep     = flag.Bool("keep", false, "leave the indexes in place after the run")
 	)
 	flag.Parse()
 
@@ -59,17 +60,18 @@ func main() {
 		fail(err)
 	}
 	cfg := config{
-		dataset: d,
-		metric:  m,
-		data:    *data,
-		out:     *out,
-		work:    *work,
-		binDir:  *binDir,
-		k:       *k,
-		limit:   *limit,
-		queries: *queries,
-		workers: *workers,
-		keep:    *keep,
+		dataset:  d,
+		metric:   m,
+		data:     *data,
+		out:      *out,
+		work:     *work,
+		binDir:   *binDir,
+		k:        *k,
+		limit:    *limit,
+		queries:  *queries,
+		workers:  *workers,
+		keep:     *keep,
+		deadline: *deadline,
 	}
 	if *engines != "" {
 		cfg.engines = strings.Split(*engines, ",")
@@ -93,18 +95,19 @@ func metricNames() string {
 }
 
 type config struct {
-	dataset vectors.Dataset
-	metric  vectors.Metric
-	data    string
-	out     string
-	work    string
-	binDir  string
-	engines []string
-	k       int
-	limit   int
-	queries int
-	workers int
-	keep    bool
+	dataset  vectors.Dataset
+	metric   vectors.Metric
+	data     string
+	out      string
+	work     string
+	binDir   string
+	engines  []string
+	k        int
+	limit    int
+	queries  int
+	workers  int
+	keep     bool
+	deadline time.Duration
 }
 
 func run(cfg config) error {
@@ -219,15 +222,30 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.VectorResult, er
 	}
 
 	var stdout bytes.Buffer
-	// No deadline. Building a graph index over a million vectors takes as long
-	// as it takes, and a timeout here would turn a slow engine into a missing
-	// row instead of a slow number.
-	cmd := exec.CommandContext(context.Background(), r.path, args...)
+	// No deadline by default. Building a graph index over a million vectors
+	// takes as long as it takes, and a timeout would turn a slow engine into a
+	// missing row instead of a slow number, which is the opposite of what this
+	// is for.
+	//
+	// It is a flag because an engine that is merely slow and one that will
+	// never finish look identical from outside. Setting -deadline says how
+	// long the difference is worth waiting for, and the engine is then
+	// reported as having failed to finish rather than quietly left out.
+	ctx := context.Background()
+	if cfg.deadline > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.deadline)
+		defer cancel()
+	}
+	cmd := exec.CommandContext(ctx, r.path, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = os.Stderr
 
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return bench.VectorResult{}, fmt.Errorf("did not finish within %s", cfg.deadline)
+		}
 		return bench.VectorResult{}, err
 	}
 	fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, time.Since(start).Round(time.Second))

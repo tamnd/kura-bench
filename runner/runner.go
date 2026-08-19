@@ -282,7 +282,13 @@ func queryPhase(cfg Config, eng Engine, res *bench.Result) error {
 			}
 			runs = append(runs, time.Since(t))
 		}
-		stats = append(stats, bench.Summarise(q, hits, runs))
+		stat := bench.Summarise(q, hits, runs)
+		stats = append(stats, stat)
+		// One line per query rather than per run, so a slow engine says where
+		// it has got to instead of looking hung for an hour. It is printed
+		// after the timed runs and never between them.
+		fmt.Fprintf(os.Stderr, "  %-40s %8d hits  %s median\n",
+			q, stat.Hits, time.Duration(stat.MedianMS*float64(time.Millisecond)).Round(time.Microsecond))
 	}
 	searchUsage := bench.Measure(searchStart)
 

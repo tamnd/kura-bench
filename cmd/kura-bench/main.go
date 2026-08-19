@@ -39,19 +39,21 @@ func main() {
 		repeat     = flag.Int("repeat", 20, "how many times each query is timed")
 		workers    = flag.Int("workers", 0, "queries in flight, zero for one per core")
 		keep       = flag.Bool("keep", false, "leave the indexes in place after the run")
+		deadline   = flag.Duration("deadline", 0, "give up on a phase that runs longer than this, zero for no limit")
 	)
 	flag.Parse()
 
 	cfg := config{
-		corpus:  *corpusPath,
-		queries: *queries,
-		out:     *out,
-		work:    *work,
-		binDir:  *binDir,
-		limit:   *limit,
-		repeat:  *repeat,
-		workers: *workers,
-		keep:    *keep,
+		corpus:   *corpusPath,
+		queries:  *queries,
+		out:      *out,
+		work:     *work,
+		binDir:   *binDir,
+		limit:    *limit,
+		repeat:   *repeat,
+		workers:  *workers,
+		keep:     *keep,
+		deadline: *deadline,
 	}
 	if *engines != "" {
 		cfg.engines = strings.Split(*engines, ",")
@@ -64,16 +66,17 @@ func main() {
 }
 
 type config struct {
-	corpus  string
-	queries string
-	out     string
-	work    string
-	binDir  string
-	engines []string
-	limit   int
-	repeat  int
-	workers int
-	keep    bool
+	corpus   string
+	queries  string
+	out      string
+	work     string
+	binDir   string
+	engines  []string
+	limit    int
+	repeat   int
+	workers  int
+	keep     bool
+	deadline time.Duration
 }
 
 func run(cfg config) error {
@@ -173,10 +176,23 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
 	}
 
 	var stdout bytes.Buffer
-	// No deadline on purpose. An index phase over a real corpus takes as long
-	// as it takes, and a timeout here would turn a slow engine into a missing
-	// row instead of a slow number.
-	cmd := exec.CommandContext(context.Background(), r.path, args...)
+	// No deadline by default. An index phase over a real corpus takes as long
+	// as it takes, and a timeout would turn a slow engine into a missing row
+	// instead of a slow number, which is the opposite of what this is for.
+	//
+	// It is a flag because the other failure looks identical from outside. An
+	// engine whose query cost is proportional to the match set does not stop,
+	// it just keeps going, and one of those will hold a whole run for as long
+	// as you let it. Setting -deadline says how long that is worth waiting,
+	// and the engine is then reported as having failed to finish rather than
+	// quietly left out.
+	ctx := context.Background()
+	if cfg.deadline > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.deadline)
+		defer cancel()
+	}
+	cmd := exec.CommandContext(ctx, r.path, args...)
 	cmd.Stdout = &stdout
 	// The runner's progress goes straight through, because these phases take
 	// minutes and a run that prints nothing for that long looks hung.
@@ -184,6 +200,9 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
 
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return bench.Result{}, fmt.Errorf("did not finish within %s", cfg.deadline)
+		}
 		return bench.Result{}, err
 	}
 	fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, time.Since(start).Round(time.Second))
