@@ -1,0 +1,19 @@
+# Built binaries.
+/bin/
+/dist/
+
+# The corpus and the working indexes. A corpus is gigabytes and is rebuilt from
+# named checkouts, so it is described in the results rather than committed.
+*.jsonl
+/work/
+
+# Results are committed on purpose, so results/ is deliberately not ignored.
+
+# Rust build output.
+/runners/tantivy/target/
+
+# Editors and platform noise.
+.DS_Store
+*.swp
+.idea/
+.vscode/

@@ -1,0 +1,252 @@
+# One tag push produces everything somebody needs to run this on a machine they
+# are not going to install a toolchain on: archives for every platform, Linux
+# packages, a container image, and Homebrew and Scoop entries.
+#
+# That matters more here than in a normal project. A benchmark is run on other
+# people's hardware, and asking for a Go toolchain and a Rust toolchain before a
+# number can be taken is how a benchmark ends up only ever running on the author's
+# laptop.
+#
+# Publish steps that push to a repository that may not exist yet self-disable
+# when their token is absent, so a release with no extra secrets still produces
+# every downloadable artifact and the container image.
+version: 2
+
+project_name: kura-bench
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  # The orchestrator. It runs each engine's index phase and query phase as
+  # separate processes and writes the report.
+  - id: kura-bench
+    binary: kura-bench
+    main: ./cmd/kura-bench
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: &targets
+      - linux_amd64
+      - linux_arm64
+      - darwin_amd64
+      - darwin_arm64
+      - windows_amd64
+      - windows_arm64
+
+  # The corpus builder. It is the slowest thing in the repository and the only
+  # one that touches a checkout, so it is worth having on its own.
+  - id: kura-corpus
+    binary: kura-corpus
+    main: ./cmd/kura-corpus
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
+  # The engines. Each one is its own process so that the open phase is a real
+  # cold start and so that one engine crashing does not take the run with it.
+  #
+  # Every runner is built with the same flags. An engine measured with different
+  # optimisation settings than the one next to it is not being compared to it.
+  - id: bleve-runner
+    binary: bleve-runner
+    main: ./runners/bleve
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
+  - id: sqlitefts-runner
+    binary: sqlitefts-runner
+    main: ./runners/sqlitefts
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
+  - id: genba-runner
+    binary: genba-runner
+    main: ./runners/genba
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
+archives:
+  # One archive with the orchestrator, the corpus builder and every Go runner in
+  # it, plus the query set. Unpack it on a machine and there is nothing else to
+  # fetch before a run.
+  #
+  # The Tantivy runner is not in here. It needs a Rust toolchain to build for the
+  # target and shipping a stale one would be worse than shipping none, so a run
+  # that includes it is built from source with `make build`.
+  - id: default
+    ids:
+      - kura-bench
+      - kura-corpus
+      - bleve-runner
+      - sqlitefts-runner
+      - genba-runner
+    name_template: "kura-bench_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - queries.txt
+
+nfpms:
+  - id: linux-packages
+    package_name: kura-bench
+    ids:
+      - kura-bench
+      - kura-corpus
+      - bleve-runner
+      - sqlitefts-runner
+      - genba-runner
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: tamnd
+    homepage: https://github.com/tamnd/kura-bench
+    maintainer: Duc-Tam Nguyen <tamnd87@gmail.com>
+    description: Search engine benchmark suite, real corpora and real numbers for indexing, search, memory, disk and CPU.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+    section: utils
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/kura-bench/LICENSE
+      - src: ./queries.txt
+        dst: /usr/share/kura-bench/queries.txt
+
+dockers_v2:
+  - images:
+      - ghcr.io/tamnd/kura-bench
+    tags:
+      - "{{ .Version }}"
+      - latest
+    dockerfile: Dockerfile
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.description: "Search engine benchmark suite"
+      org.opencontainers.image.url: "https://github.com/tamnd/kura-bench"
+      org.opencontainers.image.source: "https://github.com/tamnd/kura-bench"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: "MIT"
+
+homebrew_casks:
+  - name: kura-bench
+    ids:
+      - default
+    repository:
+      owner: tamnd
+      name: homebrew-tap
+      token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
+    directory: Casks
+    homepage: https://github.com/tamnd/kura-bench
+    description: Search engine benchmark suite
+    skip_upload: '{{ if envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}false{{ else }}true{{ end }}'
+    commit_author:
+      name: Duc-Tam Nguyen
+      email: tamnd87@gmail.com
+
+scoops:
+  - ids:
+      - default
+    repository:
+      owner: tamnd
+      name: scoop-bucket
+      token: '{{ envOrDefault "SCOOP_BUCKET_GITHUB_TOKEN" "" }}'
+    homepage: https://github.com/tamnd/kura-bench
+    description: Search engine benchmark suite
+    license: MIT
+    skip_upload: '{{ if envOrDefault "SCOOP_BUCKET_GITHUB_TOKEN" "" }}false{{ else }}true{{ end }}'
+    commit_author:
+      name: Duc-Tam Nguyen
+      email: tamnd87@gmail.com
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+sboms:
+  - id: archive
+    artifacts: archive
+
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+docker_signs:
+  - cmd: cosign
+    artifacts: manifests
+    args:
+      - sign
+      - "${artifact}@${digest}"
+      - "--yes"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+
+release:
+  github:
+    owner: tamnd
+    name: kura-bench
+  draft: false
+  prerelease: auto

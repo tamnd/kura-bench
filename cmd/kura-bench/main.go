@@ -1,0 +1,273 @@
+// Command kura-bench runs every engine over the same corpus and writes the
+// report.
+//
+// It runs each engine twice, once to build the index and once to query it,
+// because a cold start measured in the process that just wrote the index is not
+// a cold start. It also runs the engines one after another rather than at the
+// same time, since two of them competing for the same disk would produce a
+// table about the disk.
+//
+//	kura-bench -corpus corpus.jsonl -queries queries.txt -out results
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/tamnd/kura-bench/bench"
+)
+
+func main() {
+	var (
+		corpusPath = flag.String("corpus", "corpus.jsonl", "corpus file every engine is given")
+		queries    = flag.String("queries", "queries.txt", "query file")
+		out        = flag.String("out", "results", "directory the results and the report are written to")
+		work       = flag.String("work", "", "directory the indexes are built in, defaults to a temporary one")
+		binDir     = flag.String("bin", "bin", "directory holding the runner binaries")
+		engines    = flag.String("engines", "", "comma separated engines to run, empty for every runner found")
+		limit      = flag.Int("limit", 0, "stop after this many documents, zero for the whole corpus")
+		repeat     = flag.Int("repeat", 20, "how many times each query is timed")
+		workers    = flag.Int("workers", 0, "queries in flight, zero for one per core")
+		keep       = flag.Bool("keep", false, "leave the indexes in place after the run")
+	)
+	flag.Parse()
+
+	cfg := config{
+		corpus:  *corpusPath,
+		queries: *queries,
+		out:     *out,
+		work:    *work,
+		binDir:  *binDir,
+		limit:   *limit,
+		repeat:  *repeat,
+		workers: *workers,
+		keep:    *keep,
+	}
+	if *engines != "" {
+		cfg.engines = strings.Split(*engines, ",")
+	}
+
+	if err := run(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, "kura-bench:", err)
+		os.Exit(1)
+	}
+}
+
+type config struct {
+	corpus  string
+	queries string
+	out     string
+	work    string
+	binDir  string
+	engines []string
+	limit   int
+	repeat  int
+	workers int
+	keep    bool
+}
+
+func run(cfg config) error {
+	if _, err := os.Stat(cfg.corpus); err != nil {
+		return fmt.Errorf("%w, build one with kura-corpus", err)
+	}
+	runners, err := discover(cfg)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(cfg.out, 0o755); err != nil {
+		return err
+	}
+
+	root := cfg.work
+	if root == "" {
+		root, err = os.MkdirTemp("", "kura-bench-")
+		if err != nil {
+			return err
+		}
+		if !cfg.keep {
+			defer func() { _ = os.RemoveAll(root) }()
+		}
+	}
+
+	var results []bench.Result
+	for _, r := range runners {
+		fmt.Fprintf(os.Stderr, "\n== %s\n", r.name)
+		res, err := measure(cfg, r, filepath.Join(root, r.name))
+		if err != nil {
+			// One engine failing is a fact about that engine. Stopping here
+			// would throw away the results of the ones that already ran, and
+			// those took hours.
+			fmt.Fprintf(os.Stderr, "%s failed, leaving it out of the report: %v\n", r.name, err)
+			continue
+		}
+		results = append(results, res)
+
+		name := filepath.Join(cfg.out, r.name+"-"+hostSlug(res.Machine.Host)+".json")
+		if err := writeJSON(name, res); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "wrote %s\n", name)
+	}
+	if len(results) == 0 {
+		return fmt.Errorf("every engine failed")
+	}
+
+	report := filepath.Join(cfg.out, "report-"+hostSlug(results[0].Machine.Host)+".md")
+	body := header(cfg, results[0]) + bench.Report(results)
+	if err := os.WriteFile(report, []byte(body), 0o644); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "\nwrote %s\n", report)
+	return nil
+}
+
+// measure runs one engine's two phases and merges them.
+func measure(cfg config, r runnerBin, work string) (bench.Result, error) {
+	// A leftover index from a previous run would be measured as an engine that
+	// indexes instantly, so the directory is emptied rather than reused.
+	if err := os.RemoveAll(work); err != nil {
+		return bench.Result{}, err
+	}
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		return bench.Result{}, err
+	}
+	if !cfg.keep {
+		defer func() { _ = os.RemoveAll(work) }()
+	}
+
+	index, err := invoke(cfg, r, work, "index")
+	if err != nil {
+		return bench.Result{}, fmt.Errorf("index phase: %w", err)
+	}
+	query, err := invoke(cfg, r, work, "query")
+	if err != nil {
+		return bench.Result{}, fmt.Errorf("query phase: %w", err)
+	}
+	return bench.Merge(index, query), nil
+}
+
+// invoke runs a runner once and parses the one JSON object it writes.
+func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
+	args := []string{
+		"-corpus", cfg.corpus,
+		"-queries", cfg.queries,
+		"-work", work,
+		"-phase", phase,
+		"-repeat", strconv.Itoa(cfg.repeat),
+	}
+	if cfg.limit > 0 {
+		args = append(args, "-limit", strconv.Itoa(cfg.limit))
+	}
+	if cfg.workers > 0 {
+		args = append(args, "-workers", strconv.Itoa(cfg.workers))
+	}
+
+	var stdout bytes.Buffer
+	cmd := exec.Command(r.path, args...)
+	cmd.Stdout = &stdout
+	// The runner's progress goes straight through, because these phases take
+	// minutes and a run that prints nothing for that long looks hung.
+	cmd.Stderr = os.Stderr
+
+	start := time.Now()
+	if err := cmd.Run(); err != nil {
+		return bench.Result{}, err
+	}
+	fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, time.Since(start).Round(time.Second))
+
+	var res bench.Result
+	if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &res); err != nil {
+		return bench.Result{}, fmt.Errorf("the runner did not write a result: %w", err)
+	}
+	return res, nil
+}
+
+type runnerBin struct {
+	name string
+	path string
+}
+
+// discover finds the runner binaries.
+//
+// A runner is any file in the directory called <engine>-runner, which is how an
+// engine written in another language joins the comparison without anything here
+// knowing about it. The corpus builder and the orchestrator live in the same
+// directory and are skipped by the same rule.
+func discover(cfg config) ([]runnerBin, error) {
+	entries, err := os.ReadDir(cfg.binDir)
+	if err != nil {
+		return nil, fmt.Errorf("%w, run make build first", err)
+	}
+
+	want := map[string]bool{}
+	for _, e := range cfg.engines {
+		want[strings.TrimSpace(e)] = true
+	}
+
+	var out []runnerBin
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		base := strings.TrimSuffix(e.Name(), ".exe")
+		name, ok := strings.CutSuffix(base, "-runner")
+		if !ok || name == "" {
+			continue
+		}
+		if len(want) > 0 && !want[name] {
+			continue
+		}
+		out = append(out, runnerBin{name: name, path: filepath.Join(cfg.binDir, e.Name())})
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no runners in %s, run make build first", cfg.binDir)
+	}
+	return out, nil
+}
+
+func writeJSON(name string, res bench.Result) error {
+	b, err := json.MarshalIndent(res, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(name, append(b, '\n'), 0o644)
+}
+
+// header records how the run was invoked, because a table without the command
+// that produced it is not something anybody can repeat.
+func header(cfg config, first bench.Result) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Results on %s\n\n", first.Machine.Host)
+	fmt.Fprintf(&b, "Corpus %s, queries %s, %d timed runs per query", cfg.corpus, cfg.queries, cfg.repeat)
+	if cfg.limit > 0 {
+		fmt.Fprintf(&b, ", limited to %d documents", cfg.limit)
+	}
+	b.WriteString(".\n\n")
+	return b.String()
+}
+
+// hostSlug makes a host name safe to put in a file name, since these results
+// are committed and a machine called something with a dot in it should not
+// produce a file that looks like it has an extension.
+func hostSlug(host string) string {
+	if host == "" {
+		return "unknown"
+	}
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r + 32
+		}
+		return '-'
+	}, host)
+}

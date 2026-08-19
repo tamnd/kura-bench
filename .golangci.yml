@@ -1,0 +1,80 @@
+# golangci-lint v2 configuration.
+#
+# The set is the default one plus the checks that catch what this codebase can
+# actually get wrong: a dropped error in a measurement path, a context that
+# never reaches the engine being timed, an allocation inside a loop that is
+# being timed.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - durationcheck
+    - errorlint
+    - gocritic
+    - misspell
+    - nilerr
+    - noctx
+    - perfsprint
+    - prealloc
+    - revive
+    - unconvert
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - ifElseChain
+        - whyNoLint
+        # A document and a result are values, and passing them by value is what
+        # keeps a runner from mutating something the harness still owns. The
+        # copy is nowhere near where the time goes in a phase that runs for
+        # minutes.
+        - hugeParam
+        - rangeValCopy
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - noctx
+          - prealloc
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/tamnd/kura-bench
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -1,0 +1,34 @@
+# The query set.
+#
+# These are not random words. Each line is here to exercise a different part of
+# an engine, and the mix is what stops a table from being an average of one
+# thing. Lines starting with a hash are ignored.
+#
+# Very common terms. Every engine has a long posting list for these and the
+# cost is dominated by walking it, which is where an engine that scores every
+# document instead of skipping ahead falls over.
+memory allocation
+return value
+error handling
+
+# Ordinary two and three word queries, which is what most searches actually
+# look like.
+deadlock detection
+reference counting
+buffer overflow check
+thread pool shutdown
+
+# Rare terms. The posting list is short and what is being measured is the
+# dictionary lookup and the cold read, not the scan.
+mmap_region
+kasan
+tsan_atomic
+
+# A term that appears in prose rather than code, which is the case a knowledge
+# platform exists for and a code search tool is not tuned for.
+backwards compatibility guarantee
+deprecated in favour of
+
+# A single very common word, which is the worst case for any engine and the
+# query that separates one that can skip from one that cannot.
+the
