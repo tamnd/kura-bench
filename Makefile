@@ -15,6 +15,13 @@ RUST_VECRUNNERS := exact turbovec hnsw
 RUST_GRAPHRUNNERS := csr petgraph
 RUST := runners/rust
 
+# ladybug is a C++ shared library, so its runner is the one thing here that
+# needs cgo and a library fetched ahead of time. It is built by its own target
+# rather than by the default one, and everything else works without it.
+LADYBUG := third_party/ladybug
+LADYBUG_VERSION := $(shell sed -n 's/^[[:space:]]*"version": "\([^"]*\)".*/\1/p' $(LADYBUG)/ladybug.json | head -1)
+LADYBUG_DIR := $(abspath $(LADYBUG)/$(LADYBUG_VERSION)/$(shell $(GO) env GOOS)-$(shell $(GO) env GOARCH))
+
 DATA ?= vecdata
 DATASET ?= sift
 METRIC ?= euclidean
@@ -86,6 +93,22 @@ rust-runners:
 	else \
 		echo "no cargo on this machine, skipping the rust runners"; \
 	fi
+
+# Fetches the pinned shared library for this machine. It reaches the network,
+# so it is a separate target from the build and never runs during a benchmark.
+.PHONY: ladybug-lib
+ladybug-lib:
+	$(LADYBUG)/fetch.sh
+
+# The rpath is what lets the binary find the library without an environment
+# variable at run time, which matters because the orchestrator starts the
+# runners itself.
+.PHONY: ladybug
+ladybug: ladybug-lib
+	CGO_ENABLED=1 \
+	CGO_CFLAGS="-I$(LADYBUG_DIR)" \
+	CGO_LDFLAGS="-L$(LADYBUG_DIR) -Wl,-rpath,$(LADYBUG_DIR)" \
+	$(GO) build -tags ladybug -o $(BIN)/ladybug-graphrunner ./runners/ladybug
 
 .PHONY: test
 test:

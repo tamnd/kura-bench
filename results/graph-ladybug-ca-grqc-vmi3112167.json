@@ -1,0 +1,139 @@
+{
+  "engine": "ladybug",
+  "version": "0.19.1",
+  "language": "c++",
+  "dataset": {
+    "name": "ca-grqc",
+    "nodes": 5242,
+    "edges": 28980,
+    "undirected": true,
+    "seeds": 1000
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 1.036772993,
+      "user_seconds": 0.486438,
+      "sys_seconds": 0.459227,
+      "peak_rss_bytes": 83169280,
+      "rss_bytes": 83468288,
+      "read_bytes": 0,
+      "write_bytes": 3973120
+    },
+    "bytes": 2809290,
+    "files": 3
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.191742502,
+      "user_seconds": 0.111858,
+      "sys_seconds": 0.079537,
+      "peak_rss_bytes": 55181312,
+      "rss_bytes": 55635968,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 55635968
+  },
+  "query": {
+    "usage": {
+      "wall_seconds": 22.203203908,
+      "user_seconds": 10.680929,
+      "sys_seconds": 18.045318,
+      "peak_rss_bytes": 101695488,
+      "rss_bytes": 102301696,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "ops": [
+      {
+        "op": "neighbours",
+        "runs": 1000,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 1.504728,
+        "median_ms": 6.046442,
+        "p90_ms": 16.026542,
+        "p99_ms": 64.60652,
+        "max_ms": 146.178662,
+        "concurrent": {
+          "workers": 6,
+          "queries": 1000,
+          "seconds": 7.010573606,
+          "median_ms": 27.47179,
+          "p99_ms": 258.022301
+        }
+      },
+      {
+        "op": "two-hop",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 4.793095,
+        "median_ms": 9.800042,
+        "p90_ms": 17.605358,
+        "p99_ms": 58.356788,
+        "max_ms": 85.55051,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.897888144,
+          "median_ms": 29.077243,
+          "p99_ms": 340.879591
+        }
+      },
+      {
+        "op": "shortest-path",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 2.189914,
+        "median_ms": 19.288883,
+        "p90_ms": 47.742736,
+        "p99_ms": 89.219017,
+        "max_ms": 100.911979,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.818937608,
+          "median_ms": 41.34436,
+          "p99_ms": 148.851896
+        }
+      },
+      {
+        "op": "bfs",
+        "runs": 10,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 38.001582,
+        "median_ms": 51.019713,
+        "p90_ms": 86.071729,
+        "p99_ms": 196.076173,
+        "max_ms": 196.076173
+      },
+      {
+        "op": "pagerank",
+        "runs": 0,
+        "correct": 0,
+        "mismatches": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p90_ms": 0,
+        "p99_ms": 0,
+        "max_ms": 0,
+        "unsupported": "its PageRank lives in an extension that is downloaded at first use, and a benchmark that reaches the network mid run is measuring the network"
+      }
+    ]
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "amd64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 8.62,
+    "memory_free_bytes": 6609625088,
+    "dedicated": false
+  },
+  "notes": "a property graph database reached through its C API, loaded with COPY from a CSV the way its own documentation loads a graph, and queried in Cypher rather than by walking the adjacency from the runner"
+}

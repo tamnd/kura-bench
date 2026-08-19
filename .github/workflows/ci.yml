@@ -204,8 +204,17 @@ jobs:
   # engine that disagrees is a real disagreement and not a rounding difference.
   # A graph store that dropped half the edges answers every question faster than
   # one that did not, and no timing column would ever say so.
+  #
+  # This one runs on macOS as well as Linux, which the other smokes do not. The
+  # graph suite is the only one with a C++ engine in it, an engine gets into
+  # this suite only if it runs everywhere, and the way to know that is to run it
+  # everywhere on every pull request rather than to find out later.
   graph-smoke:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v7
@@ -219,6 +228,10 @@ jobs:
           workspaces: runners/rust
       - name: build everything
         run: make build
+      # Separate from the build because it downloads the pinned shared library,
+      # and nothing else in the build touches the network.
+      - name: build the ladybug runner
+        run: make ladybug
       - name: fetch ca-GrQc and work out the answers
         run: ./bin/kura-graphs -dataset ca-grqc -out graphdata
       - name: run every engine
@@ -252,7 +265,7 @@ jobs:
         run: cat results/graph-report-*.md
       - uses: actions/upload-artifact@v4
         with:
-          name: graph-smoke-results
+          name: graph-smoke-results-${{ matrix.os }}
           path: results/
 
   # golangci-lint bundles staticcheck, govet, ineffassign, errcheck, unused and

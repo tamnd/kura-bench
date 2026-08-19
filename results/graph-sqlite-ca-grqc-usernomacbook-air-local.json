@@ -1,0 +1,138 @@
+{
+  "engine": "sqlite",
+  "version": "v1.56.0",
+  "language": "go",
+  "dataset": {
+    "name": "ca-grqc",
+    "nodes": 5242,
+    "edges": 28980,
+    "undirected": true,
+    "seeds": 1000
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 0.061660166,
+      "user_seconds": 0.055478,
+      "sys_seconds": 0.006248,
+      "peak_rss_bytes": 21331968,
+      "rss_bytes": 6413344,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "bytes": 843776,
+    "files": 3
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.001022917,
+      "user_seconds": 0.000398,
+      "sys_seconds": 0.000658,
+      "peak_rss_bytes": 15777792,
+      "rss_bytes": 2669200,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 2669200
+  },
+  "query": {
+    "usage": {
+      "wall_seconds": 2.635835125,
+      "user_seconds": 4.692434,
+      "sys_seconds": 1.57313,
+      "peak_rss_bytes": 28049408,
+      "rss_bytes": 2474256,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "ops": [
+      {
+        "op": "neighbours",
+        "runs": 1000,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.006125,
+        "median_ms": 0.006708,
+        "p90_ms": 0.008875,
+        "p99_ms": 0.011708,
+        "max_ms": 0.022958,
+        "concurrent": {
+          "workers": 10,
+          "queries": 1000,
+          "seconds": 0.007370875,
+          "median_ms": 0.010542,
+          "p99_ms": 1.499041
+        }
+      },
+      {
+        "op": "two-hop",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.018291,
+        "median_ms": 0.026375,
+        "p90_ms": 0.092291,
+        "p99_ms": 0.51525,
+        "max_ms": 0.520333,
+        "concurrent": {
+          "workers": 10,
+          "queries": 100,
+          "seconds": 0.004438666,
+          "median_ms": 0.171708,
+          "p99_ms": 2.237667
+        }
+      },
+      {
+        "op": "shortest-path",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.012917,
+        "median_ms": 4.748416,
+        "p90_ms": 31.916375,
+        "p99_ms": 34.583542,
+        "max_ms": 35.402917,
+        "concurrent": {
+          "workers": 10,
+          "queries": 100,
+          "seconds": 0.998091125,
+          "median_ms": 48.564208,
+          "p99_ms": 423.895959
+        }
+      },
+      {
+        "op": "bfs",
+        "runs": 10,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 38.090875,
+        "median_ms": 43.091625,
+        "p90_ms": 51.523167,
+        "p99_ms": 60.528125,
+        "max_ms": 60.528125
+      },
+      {
+        "op": "pagerank",
+        "runs": 1,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 185.613541,
+        "median_ms": 185.613541,
+        "p90_ms": 185.613541,
+        "p99_ms": 185.613541,
+        "max_ms": 185.613541
+      }
+    ]
+  },
+  "machine": {
+    "host": "USERnoMacBook-Air.local",
+    "os": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memory_bytes": 25769803776,
+    "load_before": 18.76,
+    "memory_free_bytes": 0,
+    "dedicated": false
+  },
+  "notes": "the edges live in one table with a covering index on both columns, and the traversals walk it a level at a time from Go, which is how a relational store is used as a graph in practice"
+}

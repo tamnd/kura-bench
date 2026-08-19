@@ -1,0 +1,39 @@
+{
+  "comment": [
+    "The ladybug shared library, pinned to a release and to the exact bytes of",
+    "each platform's archive. fetch.sh downloads the one that matches the host",
+    "and refuses anything whose checksum does not match.",
+    "",
+    "It is a prebuilt library rather than a source build because the point here",
+    "is to measure the engine people install, and because building the C++ tree",
+    "from source is what kept kuzu out of this suite in the first place."
+  ],
+  "repo": "LadybugDB/ladybug",
+  "version": "v0.19.1",
+  "assets": {
+    "linux-amd64": {
+      "file": "liblbug-linux-x86_64.tar.gz",
+      "sha256": "ed263ae913f68cb0ddba0b98548b58edaac49929766d03bdaaa83be46c68847d"
+    },
+    "linux-arm64": {
+      "file": "liblbug-linux-aarch64.tar.gz",
+      "sha256": "b07df2cd533c3976a2a3025866d6420a5f35514d0a822ecc4b2902d55b4725b7"
+    },
+    "darwin-arm64": {
+      "file": "liblbug-osx-arm64.tar.gz",
+      "sha256": "276ce32705fb01f3bf27dcffa053dd181f5bc96628760e961bece46cf85b770e"
+    },
+    "darwin-amd64": {
+      "file": "liblbug-osx-x86_64.tar.gz",
+      "sha256": "0f941f9f983f0184a177e938f0816d3aaa71266fe6d87fef2c5023cebe03c20a"
+    },
+    "windows-amd64": {
+      "file": "liblbug-windows-x86_64.zip",
+      "sha256": "865e2c8765064be76d41e4d786dfb0cd3ad0c258ddaf7b522fa3da7159ecd3ef"
+    },
+    "windows-arm64": {
+      "file": "liblbug-windows-arm64.zip",
+      "sha256": "94b3289d4c3f9356d5020dad2acfab9525e3a5c45bc16ca9fed99cc949e6fa4f"
+    }
+  }
+}

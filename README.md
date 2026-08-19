@@ -108,6 +108,13 @@ Graph:
 | csr | Rust | A compressed sparse row adjacency and nothing else, the layout everything else is trying to beat |
 | petgraph | Rust | The library a Rust program reaches for, driven through its adjacency rather than its algorithm module |
 | sqlite | Go | Two integer columns and a covering index, the design a lot of software already has |
+| ladybug | C++ | A property graph database, queried in Cypher, the only engine here that is one |
+
+ladybug is the one engine that needs a step of its own, because it is a C++ shared library rather than a Go module or a crate.
+`third_party/ladybug/fetch.sh` downloads the release its pin names and checks the archive against the sha256 in `third_party/ladybug/ladybug.json`, and `make ladybug` builds the runner against it.
+Everything else in the suite builds and runs without it, and a machine that skips it gets a graph table with three rows instead of four rather than a failure.
+
+    make ladybug
 
 Each engine is a separate binary that speaks a small contract: create, load, flush, open, ask, close.
 Adding one is a hundred lines and does not touch the harness.
@@ -316,6 +323,7 @@ docker run --rm -v "$PWD:/bench" ghcr.io/tamnd/kura-bench:latest \
 
 The Rust runners are built per platform and attached to the release separately, because they have to be compiled for the target.
 That covers the text runners for Tantivy and SeekStorm, the vector runners for the exact scan, hnsw and turbovec, and the graph runners for the sparse row adjacency and petgraph.
+The ladybug runner is not in the archive either, since it links against a library that has to be fetched for the target first.
 
 ## License
 

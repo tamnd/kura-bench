@@ -25,15 +25,21 @@ type Engine struct {
 	Suite    string `json:"suite"`
 	Language string `json:"language"`
 
-	// Registry is where the latest version comes from: gomod, crate, ours for
-	// an engine of our own that is pinned to a commit and has nothing to be
-	// behind, or none for one that is written out in this repository and has no
-	// dependency to track at all.
+	// Registry is where the latest version comes from: gomod, crate, github for
+	// a prebuilt library taken from a repository's releases, ours for an engine
+	// of our own that is pinned to a commit and has nothing to be behind, or
+	// none for one that is written out in this repository and has no dependency
+	// to track at all.
 	Registry string `json:"registry"`
 
-	// Package is the module path or the crate name, empty when the registry is
-	// none.
+	// Package is the module path, the crate name, or the owner and repository
+	// for github. It is empty when the registry is none.
 	Package string `json:"package"`
+
+	// Version is the pin, for a registry where the pin lives in this file
+	// rather than in a lock file. That is github and nothing else, because a
+	// prebuilt library has no lock file to read it out of.
+	Version string `json:"version,omitempty"`
 
 	Source string `json:"source"`
 	Note   string `json:"note,omitempty"`
@@ -121,6 +127,14 @@ func check(ctx context.Context, client *http.Client, e Engine, repo Repo) Status
 		}
 		s.Pinned = v
 		s.Latest, s.Err = LatestCrate(ctx, client, e.Package)
+
+	case "github":
+		if e.Version == "" {
+			s.Err = fmt.Errorf("%s: a github pin needs a version in engines.json", e.Name)
+			return s
+		}
+		s.Pinned = e.Version
+		s.Latest, s.Err = LatestGitHubRelease(ctx, client, e.Package)
 
 	case "ours":
 		// Ours, pinned to a commit. The module proxy's idea of the latest
@@ -275,6 +289,33 @@ func LatestCrate(ctx context.Context, client *http.Client, crate string) (string
 		return "", fmt.Errorf("%s: no released version", url)
 	}
 	return latest, nil
+}
+
+// GitHubAPI is where releases are looked up. It is a variable so a test can
+// point it somewhere it controls.
+var GitHubAPI = "https://api.github.com"
+
+// LatestGitHubRelease asks a repository for the tag of its newest release.
+//
+// The releases/latest endpoint already skips drafts and pre-releases, which is
+// the same rule the crate lookup applies by hand, so a benchmark never gets
+// told it is behind a release candidate.
+func LatestGitHubRelease(ctx context.Context, client *http.Client, repo string) (string, error) {
+	url := GitHubAPI + "/repos/" + repo + "/releases/latest"
+	body, err := get(ctx, client, url)
+	if err != nil {
+		return "", err
+	}
+	var v struct {
+		Tag string `json:"tag_name"`
+	}
+	if err := json.Unmarshal(body, &v); err != nil {
+		return "", fmt.Errorf("%s: %w", url, err)
+	}
+	if v.Tag == "" {
+		return "", fmt.Errorf("%s: no tag in the answer", url)
+	}
+	return v.Tag, nil
 }
 
 func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
