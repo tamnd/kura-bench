@@ -67,11 +67,6 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = config::from_env()?;
 
-    // The refusal that this whole metric business exists for. Answering a
-    // Euclidean run by ranking on inner product would produce a full set of
-    // plausible looking timings attached to a recall figure that means nothing.
-    cfg.require_metric(&["inner-product"])?;
-
     let mut res = result::VectorResult {
         engine: "turbovec".to_string(),
         version: "1.0.0".to_string(),
@@ -79,6 +74,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         machine: machine::describe(),
         ..Default::default()
     };
+
+    // The refusal that this whole metric business exists for. Answering a
+    // Euclidean run by ranking on inner product would produce a full set of
+    // plausible looking timings attached to a recall figure that means nothing.
+    //
+    // It is written into the result rather than raised, because a run that
+    // asks all three metrics asks this engine two questions it does not answer
+    // and the report should say so where the rows would have been.
+    if let Err(why) = cfg.require_metric(&["inner-product"]) {
+        result::decline(&cfg, &mut res, why);
+        println!("{}", serde_json::to_string(&res)?);
+        return Ok(());
+    }
 
     match cfg.phase.as_str() {
         "build" => build_phase(&cfg, &mut res)?,

@@ -1,0 +1,165 @@
+{
+  "engine": "hnsw",
+  "version": "0.3.4",
+  "language": "rust",
+  "dataset": {
+    "name": "siftsmall",
+    "dim": 128,
+    "vectors": 10000,
+    "queries": 100,
+    "k": 10,
+    "metric": "euclidean"
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 15.485914952,
+      "user_seconds": 20.362864,
+      "sys_seconds": 1.269292,
+      "peak_rss_bytes": 35307520,
+      "rss_bytes": 35655680,
+      "read_bytes": 0,
+      "write_bytes": 10620928
+    },
+    "bytes": 10613465,
+    "files": 2
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.300682203,
+      "user_seconds": 0.151424,
+      "sys_seconds": 0.13045500000000002,
+      "peak_rss_bytes": 38535168,
+      "rss_bytes": 38703104,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 38703104
+  },
+  "search": {
+    "usage": {
+      "wall_seconds": 1.933626575,
+      "user_seconds": 2.0184610000000003,
+      "sys_seconds": 0.218846,
+      "peak_rss_bytes": 39845888,
+      "rss_bytes": 40185856,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "points": [
+      {
+        "params": "ef=16",
+        "recall": 0.937,
+        "queries": 100,
+        "min_ms": 0.05867,
+        "median_ms": 0.16512,
+        "p90_ms": 0.224731,
+        "p99_ms": 0.27577599999999997,
+        "max_ms": 0.335429,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.024522082,
+          "median_ms": 0.199273,
+          "p99_ms": 5.33991
+        }
+      },
+      {
+        "params": "ef=32",
+        "recall": 0.962,
+        "queries": 100,
+        "min_ms": 0.11349200000000001,
+        "median_ms": 0.391082,
+        "p90_ms": 2.943612,
+        "p99_ms": 6.501516,
+        "max_ms": 8.632836,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.020571634,
+          "median_ms": 0.29383000000000004,
+          "p99_ms": 6.426224
+        }
+      },
+      {
+        "params": "ef=64",
+        "recall": 0.974,
+        "queries": 100,
+        "min_ms": 0.194884,
+        "median_ms": 0.479649,
+        "p90_ms": 2.983388,
+        "p99_ms": 6.113258,
+        "max_ms": 6.4348909999999995,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.02480425,
+          "median_ms": 0.380902,
+          "p99_ms": 7.763308
+        }
+      },
+      {
+        "params": "ef=128",
+        "recall": 0.976,
+        "queries": 100,
+        "min_ms": 0.338765,
+        "median_ms": 0.8976010000000001,
+        "p90_ms": 8.281438,
+        "p99_ms": 22.989171,
+        "max_ms": 27.194386,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.04831581,
+          "median_ms": 0.738342,
+          "p99_ms": 34.060304
+        }
+      },
+      {
+        "params": "ef=256",
+        "recall": 0.981,
+        "queries": 100,
+        "min_ms": 0.601055,
+        "median_ms": 5.278214,
+        "p90_ms": 16.463741,
+        "p99_ms": 33.907367,
+        "max_ms": 66.050211,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.12680409,
+          "median_ms": 3.270323,
+          "p99_ms": 98.67372200000001
+        }
+      },
+      {
+        "params": "ef=512",
+        "recall": 0.985,
+        "queries": 100,
+        "min_ms": 1.503475,
+        "median_ms": 2.170936,
+        "p90_ms": 2.686791,
+        "p99_ms": 3.146734,
+        "max_ms": 3.16165,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.125849994,
+          "median_ms": 3.994871,
+          "p99_ms": 12.342011999999999
+        }
+      }
+    ]
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "x86_64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 10.74,
+    "memory_free_bytes": 7274717184,
+    "dedicated": false
+  },
+  "notes": "built with 16 connections per node and an ef of 200, which are the defaults the library is usually run at rather than settings picked for this run"
+}

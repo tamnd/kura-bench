@@ -92,10 +92,12 @@ impl Config {
 
     /// Refuses a metric this engine cannot answer.
     ///
-    /// It is a hard error rather than a warning. A runner that quietly ranked
-    /// by inner product against Euclidean ground truth would report a recall
-    /// of about a tenth and look like a bad index, and nothing in the table
-    /// would say why.
+    /// It is a refusal rather than a warning. A runner that quietly ranked by
+    /// inner product against Euclidean ground truth would report a recall of
+    /// about a tenth and look like a bad index, and nothing in the table would
+    /// say why. What the caller does with it is write it into the result and
+    /// exit cleanly, so the engine keeps its row and the row says why it is
+    /// empty.
     pub fn require_metric(&self, supported: &[&str]) -> Result<(), String> {
         if supported.contains(&self.metric.as_str()) {
             return Ok(());

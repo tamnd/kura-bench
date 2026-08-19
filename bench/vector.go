@@ -51,6 +51,18 @@ type VectorResult struct {
 	// is empty for a run that finished. See [GraphResult.Incomplete] for why an
 	// engine that ran out of time stays in the report.
 	Incomplete string `json:"incomplete,omitempty"`
+
+	// Declined says the engine was asked for something it does not do and said
+	// so, which is the runner's own words rather than the orchestrator's guess.
+	//
+	// A vector run picks one metric and some engines rank by one metric only,
+	// so a sweep over all three asks every engine two questions it cannot
+	// answer. The runner refusing is right: ranking by inner product against
+	// Euclidean ground truth would produce a full set of plausible timings
+	// attached to a recall figure that means nothing. What was wrong was the
+	// run then dropping the engine, which left a report that reads as though
+	// nobody had thought to measure it.
+	Declined string `json:"declined,omitempty"`
 }
 
 // built says the build phase produced a measurement, which is not the same as
@@ -289,12 +301,69 @@ func MergeVector(build, query VectorResult) VectorResult {
 	if query.Dataset.Metric != "" {
 		out.Dataset.Metric = query.Dataset.Metric
 	}
-	// Two notes are two sentences that were never written to sit together, so
-	// they are joined with something that keeps them apart on the page.
-	if query.Notes != "" {
-		out.Notes = strings.TrimSpace(strings.Trim(out.Notes+"; "+query.Notes, "; "))
-	}
+	out.Notes = joinNotes(build.Notes, query.Notes)
 	return out
+}
+
+// VectorRun is what a report says about the run above its tables.
+//
+// It exists because two commands write that paragraph: the orchestrator at the
+// end of a run, and the command that rebuilds every report from the files on
+// disk afterwards. The second one has no command line to read, only results, so
+// the fields it cannot know are allowed to be empty rather than being invented.
+type VectorRun struct {
+	// Host is the machine the numbers were taken on.
+	Host string
+
+	// Dataset is the run as the engines read it.
+	Dataset DatasetStats
+
+	// From is the directory the dataset was read from, and is empty for a
+	// report rebuilt later, where the path is not in any result file and
+	// guessing at it would be worse than leaving it out.
+	From string
+
+	// Published says the ground truth for this metric came with the dataset
+	// rather than being computed here, which is what makes the exact scan's
+	// recall a check on the suite rather than a tautology.
+	Published bool
+
+	// BaseVectors is how many the dataset holds in full, so that a run given
+	// fewer can say so. Zero when the caller does not know.
+	BaseVectors int
+}
+
+// VectorHeader is the paragraph above a vector report.
+func VectorHeader(r VectorRun) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Vector results on %s\n\n", r.Host)
+
+	fmt.Fprintf(&b, "Dataset %s", r.Dataset.Name)
+	if r.From != "" {
+		fmt.Fprintf(&b, " from %s", r.From)
+	}
+	fmt.Fprintf(&b, ", ranked by %s, %d neighbours per query", MetricPhrase(r.Dataset.Metric), r.Dataset.K)
+	limited := r.BaseVectors > 0 && r.Dataset.Vectors > 0 && r.Dataset.Vectors < r.BaseVectors
+	if limited {
+		fmt.Fprintf(&b, ", limited to %s base vectors", count(r.Dataset.Vectors))
+	}
+	if r.Dataset.Queries > 0 {
+		fmt.Fprintf(&b, ", %s queries", count(r.Dataset.Queries))
+	}
+	b.WriteString(".\n\n")
+
+	if r.Published {
+		b.WriteString("The ground truth is the one published with the dataset, so the exact scan's recall is a real check on this suite: anything other than one means the files are being read wrongly and every figure below is wrong the same way.\n\n")
+	} else {
+		fmt.Fprintf(&b, "There is no published %s ground truth for this dataset, so it was computed here with a full exact scan and cached.\n", r.Dataset.Metric)
+		b.WriteString("The exact scan therefore scores one by construction and is not evidence of anything, unlike in a Euclidean run.\n\n")
+	}
+	if limited {
+		b.WriteString("The ground truth is the exact answer over the whole base set, and this run indexed only part of it.\n")
+		b.WriteString("Some true neighbours were therefore never indexed, so every recall figure below is a lower bound.\n")
+		b.WriteString("The engines are still comparable with each other because they were all given the same vectors, and they are not comparable with a run that used the whole set.\n\n")
+	}
+	return b.String()
 }
 
 // VectorReport renders a set of vector results as markdown.
@@ -355,7 +424,7 @@ func writeHeadline(b *strings.Builder, rs []VectorResult) {
 		// that has no numbers for it says so here rather than being absent. Not
 		// reached would be a claim about a curve that was never measured.
 		if !r.searched() {
-			fmt.Fprintf(b, "| %s | %s | %s | | | |\n", r.Engine, r.Version, missing(r.Incomplete))
+			fmt.Fprintf(b, "| %s | %s | %s | | | |\n", r.Engine, r.Version, missingBecause(r.Declined, r.Incomplete))
 			continue
 		}
 		lo, loOK := r.At(0.90)
@@ -447,7 +516,7 @@ func writeCurve(b *strings.Builder, rs []VectorResult) {
 
 	for _, r := range rs {
 		if !r.searched() {
-			fmt.Fprintf(b, "| %s | | %s | | | | |", r.Engine, missing(r.Incomplete))
+			fmt.Fprintf(b, "| %s | | %s | | | | |", r.Engine, missingBecause(r.Declined, r.Incomplete))
 			if perPoint {
 				b.WriteString(" | |")
 			}
@@ -494,7 +563,7 @@ func pointBuild(p VectorPoint) string {
 func writeVectorNotes(b *strings.Builder, rs []VectorResult) {
 	var lines []string
 	for _, r := range rs {
-		if note := noteFor(r.Notes, r.Incomplete); note != "" {
+		if note := noteBecause(r.Notes, r.Declined, r.Incomplete); note != "" {
 			lines = append(lines, fmt.Sprintf("- %s: %s", r.Engine, note))
 		}
 	}

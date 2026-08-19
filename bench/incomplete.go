@@ -68,3 +68,28 @@ func missing(incomplete string) string {
 	}
 	return "not run"
 }
+
+// missingBecause is missing for a suite where an engine can also refuse the run
+// outright rather than fail at it.
+//
+// An engine that will not rank by the metric a run picked has not run out of
+// time and has not been left out, and a table that said either of those about
+// it would be wrong in a way that reflects on the engine.
+func missingBecause(declined, incomplete string) string {
+	if declined != "" {
+		return "declined"
+	}
+	return missing(incomplete)
+}
+
+// noteBecause is noteFor where the reason can also be a refusal.
+func noteBecause(note, declined, incomplete string) string {
+	if declined == "" {
+		return noteFor(note, incomplete)
+	}
+	out := declined + ", so it has no numbers here rather than having been left out of the run."
+	if note != "" {
+		out += " " + upperFirst(note)
+	}
+	return out
+}

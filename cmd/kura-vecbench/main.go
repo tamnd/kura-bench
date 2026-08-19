@@ -157,6 +157,9 @@ func run(cfg config) error {
 		if res.Incomplete != "" {
 			fmt.Fprintf(os.Stderr, "%s: %s, keeping what it did measure\n", r.name, res.Incomplete)
 		}
+		if res.Declined != "" {
+			fmt.Fprintf(os.Stderr, "%s: %s, so it is in the report without numbers\n", r.name, res.Declined)
+		}
 		results = append(results, res)
 
 		name := filepath.Join(cfg.out, "vec-"+r.name+"-"+cfg.slug(res.Machine.Host)+".json")
@@ -197,6 +200,11 @@ func measure(cfg config, r runnerBin, work string) (bench.VectorResult, error) {
 			return incomplete(cfg, r, bench.VectorResult{}, late), nil
 		}
 		return bench.VectorResult{}, fmt.Errorf("build phase: %w", err)
+	}
+	// An engine that will not answer this metric said so instead of building,
+	// and there is nothing for the query phase to open. It keeps its row.
+	if build.Declined != "" {
+		return build, nil
 	}
 	query, err := invoke(cfg, r, work, "query")
 	if err != nil {
@@ -284,11 +292,16 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.VectorResult, er
 		}
 		return bench.VectorResult{}, err
 	}
-	fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, time.Since(start).Round(time.Second))
+	elapsed := time.Since(start).Round(time.Second)
 
 	var res bench.VectorResult
 	if err := json.Unmarshal(lastLine(stdout.Bytes()), &res); err != nil {
 		return bench.VectorResult{}, fmt.Errorf("the runner did not write a result: %w", err)
+	}
+	// An engine that refused the run did no work, and timing the refusal reads
+	// as a build that finished in no time at all.
+	if res.Declined == "" {
+		fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, elapsed)
 	}
 	return res, nil
 }
@@ -355,30 +368,27 @@ func writeJSON(name string, res bench.VectorResult) error {
 
 // header records how the run was invoked, because a table without the command
 // that produced it is not something anybody can repeat.
+// header is what the report says about the run above its tables. The sentences
+// live in the bench package because the command that rebuilds reports from the
+// files on disk writes the same paragraph and should not write it differently.
 func header(cfg config, first bench.VectorResult) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "# Vector results on %s\n\n", first.Machine.Host)
-	fmt.Fprintf(&b, "Dataset %s from %s, ranked by %s, %d neighbours per query",
-		cfg.dataset.Name, cfg.data, bench.MetricPhrase(string(cfg.metric)), cfg.k)
-	if cfg.limit > 0 {
-		fmt.Fprintf(&b, ", limited to %d base vectors", cfg.limit)
+	d := first.Dataset
+	if d.Name == "" {
+		d.Name = cfg.dataset.Name
 	}
-	if cfg.queries > 0 {
-		fmt.Fprintf(&b, ", %d queries", cfg.queries)
+	if d.Metric == "" {
+		d.Metric = string(cfg.metric)
 	}
-	b.WriteString(".\n\n")
-	if cfg.metric.Published() {
-		b.WriteString("The ground truth is the one published with the dataset, so the exact scan's recall is a real check on this suite: anything other than one means the files are being read wrongly and every figure below is wrong the same way.\n\n")
-	} else {
-		fmt.Fprintf(&b, "There is no published %s ground truth for this dataset, so it was computed here with a full exact scan and cached.\n", cfg.metric)
-		b.WriteString("The exact scan therefore scores one by construction and is not evidence of anything, unlike in a Euclidean run.\n\n")
+	if d.K == 0 {
+		d.K = cfg.k
 	}
-	if cfg.limit > 0 && cfg.limit < cfg.dataset.Count {
-		b.WriteString("The ground truth is the exact answer over the whole base set, and this run indexed only part of it.\n")
-		b.WriteString("Some true neighbours were therefore never indexed, so every recall figure below is a lower bound.\n")
-		b.WriteString("The engines are still comparable with each other because they were all given the same vectors, and they are not comparable with a run that used the whole set.\n\n")
-	}
-	return b.String()
+	return bench.VectorHeader(bench.VectorRun{
+		Host:        first.Machine.Host,
+		Dataset:     d,
+		From:        cfg.data,
+		Published:   cfg.metric.Published(),
+		BaseVectors: cfg.dataset.Count,
+	})
 }
 
 // slug is what tells one run's files from another's.

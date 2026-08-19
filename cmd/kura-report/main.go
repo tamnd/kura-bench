@@ -26,6 +26,7 @@ import (
 
 	"github.com/tamnd/kura-bench/bench"
 	"github.com/tamnd/kura-bench/graphs"
+	"github.com/tamnd/kura-bench/vectors"
 )
 
 func main() {
@@ -57,12 +58,16 @@ func run(dir string) error {
 	for _, path := range files {
 		name := filepath.Base(path)
 		switch {
-		case strings.HasPrefix(name, "vector-"):
+		case strings.HasPrefix(name, "vec-"):
 			var r bench.VectorResult
 			if err := read(path, &r); err != nil {
 				return err
 			}
-			key := "vector-report-" + slug(r.Dataset.Name) + "-" + slug(r.Machine.Host)
+			// The metric is in the key as well as the dataset. Three metrics
+			// over one dataset on one machine are three runs and three reports,
+			// and a key without it would put nine results in one table where
+			// the recalls are not measured against the same answer.
+			key := "vector-report-" + slug(r.Dataset.Name) + "-" + slug(r.Dataset.Metric) + "-" + slug(r.Machine.Host)
 			vector[key] = append(vector[key], r)
 
 		case strings.HasPrefix(name, "graph-"):
@@ -83,6 +88,21 @@ func run(dir string) error {
 			}
 			if r.Engine == "" {
 				return fmt.Errorf("%s: no engine in it, is this a result file", path)
+			}
+			// A vector or graph result decodes into a text one without
+			// complaining, because JSON does not mind fields it was not asked
+			// about, and comes out as an engine that indexed nothing and
+			// answered nothing. Refusing here is how a suite whose files are
+			// named wrongly is a message rather than a table of zeros in
+			// somebody else's report.
+			var probe struct {
+				Dataset json.RawMessage `json:"dataset"`
+			}
+			if err := read(path, &probe); err != nil {
+				return err
+			}
+			if len(probe.Dataset) > 0 {
+				return fmt.Errorf("%s: this is not a text result, it has a dataset in it", path)
 			}
 			key := "report-" + slug(r.Machine.Host)
 			text[key] = append(text[key], r)
@@ -140,8 +160,21 @@ func textHeader(rs []bench.Result) string {
 	return b.String()
 }
 
+// vectorHeader says what the run was over, from the results alone.
+//
+// The directory the vectors were read from is not in any result file and is not
+// invented here. Whether the ground truth was published with the dataset is not
+// in one either, but it follows from the metric, and it is the sentence that
+// says whether the exact scan's recall means anything.
 func vectorHeader(first bench.VectorResult) string {
-	return fmt.Sprintf("# Vector results on %s\n\n", first.Machine.Host)
+	run := bench.VectorRun{Host: first.Machine.Host, Dataset: first.Dataset}
+	if m, err := vectors.ParseMetric(first.Dataset.Metric); err == nil {
+		run.Published = m.Published()
+	}
+	if d, err := vectors.Lookup(first.Dataset.Name); err == nil {
+		run.BaseVectors = d.Count
+	}
+	return bench.VectorHeader(run)
 }
 
 // graphHeader says what graph the run was over.

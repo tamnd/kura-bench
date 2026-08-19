@@ -1,0 +1,62 @@
+{
+  "engine": "turbovec",
+  "version": "1.0.0",
+  "language": "rust",
+  "dataset": {
+    "name": "siftsmall",
+    "dim": 0,
+    "vectors": 0,
+    "queries": 0,
+    "k": 0,
+    "metric": "cosine"
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 0,
+      "user_seconds": 0,
+      "sys_seconds": 0,
+      "peak_rss_bytes": 0,
+      "rss_bytes": 0,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "bytes": 0,
+    "files": 0
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0,
+      "user_seconds": 0,
+      "sys_seconds": 0,
+      "peak_rss_bytes": 0,
+      "rss_bytes": 0,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 0
+  },
+  "search": {
+    "usage": {
+      "wall_seconds": 0,
+      "user_seconds": 0,
+      "sys_seconds": 0,
+      "peak_rss_bytes": 0,
+      "rss_bytes": 0,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "points": []
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "x86_64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 11.46,
+    "memory_free_bytes": 6443687936,
+    "dedicated": false
+  },
+  "declined": "this engine ranks by inner-product, and the run asked for cosine"
+}

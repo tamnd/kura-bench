@@ -68,8 +68,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // first, which makes it another spelling of cosine rather than the maximum
     // inner product ranking a recommender wants, and it asserts rather than
     // returns when handed a vector that is not.
-    cfg.require_metric(&["euclidean", "cosine"])?;
-
     let mut res = result::VectorResult {
         engine: "hnsw".to_string(),
         version: "0.3.4".to_string(),
@@ -77,6 +75,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         machine: machine::describe(),
         ..Default::default()
     };
+
+    // Said in the result rather than raised, so that a run over a metric this
+    // engine does not rank by keeps its row and the reason for it being empty.
+    if let Err(why) = cfg.require_metric(&["euclidean", "cosine"]) {
+        result::decline(&cfg, &mut res, why);
+        println!("{}", serde_json::to_string(&res)?);
+        return Ok(());
+    }
 
     match cfg.phase.as_str() {
         "build" => build_phase(&cfg, &mut res)?,

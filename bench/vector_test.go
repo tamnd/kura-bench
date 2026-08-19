@@ -60,6 +60,42 @@ func TestAVectorPhaseThatNeverRanIsNotARowOfZeros(t *testing.T) {
 	}
 }
 
+// An engine that refuses the metric a run picked has not failed and has not run
+// out of time, and the report has to be able to tell the three apart. The defect
+// this was written for: turbovec ranks by inner product only, and a Euclidean
+// run dropped it, so the report read as though nobody had thought to measure it.
+func TestAVectorEngineThatDeclinedTheMetricKeepsItsRow(t *testing.T) {
+	got := VectorReport([]VectorResult{
+		builtAndSearched("exact"),
+		{
+			Engine:   "turbovec",
+			Version:  "1.0.0",
+			Dataset:  DatasetStats{Name: "sift", Metric: "euclidean"},
+			Machine:  Machine{Host: "box"},
+			Declined: "this engine ranks by inner-product, and the run asked for euclidean",
+		},
+	})
+
+	for _, want := range []string{
+		"| turbovec | 1.0.0 | declined |",
+		"- turbovec: this engine ranks by inner-product, and the run asked for euclidean",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the report does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "turbovec | 1.0.0 | ran out of time") {
+		t.Errorf("an engine that refused the run is described as having been too slow:\n%s", got)
+	}
+	// It built nothing and opened nothing, so a row in either table would be a
+	// row of zeros.
+	for _, table := range []string{"## Building the index", "## Storage", "## Cold start"} {
+		if body := section(t, got, table); strings.Contains(body, "turbovec") {
+			t.Errorf("%s has a row for an engine that never ran:\n%s", table, body)
+		}
+	}
+}
+
 // The engine that ran out of time may sort first, and the section saying what
 // was searched has to come from an engine that read it.
 func TestTheDatasetIsDescribedByAnEngineThatSawIt(t *testing.T) {
