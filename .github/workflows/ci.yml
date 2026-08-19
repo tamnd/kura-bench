@@ -192,6 +192,69 @@ jobs:
           name: vector-smoke-results
           path: results/
 
+  # The same thing for the graph suite, on ca-GrQc.
+  #
+  # Five megabytes of collaboration data from Arxiv, 5,242 authors and 28,980
+  # edges, small enough to fetch and run on every pull request and still a real
+  # graph rather than a generated one.
+  #
+  # The check that matters here is the correctness column. The answers are
+  # worked out once in Go by walking the edge list the plainest way there is,
+  # and every runner is a separate implementation in another language, so an
+  # engine that disagrees is a real disagreement and not a rounding difference.
+  # A graph store that dropped half the edges answers every question faster than
+  # one that did not, and no timing column would ever say so.
+  graph-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runners/rust
+      - name: build everything
+        run: make build
+      - name: fetch ca-GrQc and work out the answers
+        run: ./bin/kura-graphs -dataset ca-grqc -out graphdata
+      - name: run every engine
+        run: >
+          ./bin/kura-graphbench -dataset ca-grqc
+          -data graphdata -bin bin -out results
+      # The subgraph path has its own answers worked out on the smaller graph,
+      # so a mistake in it shows up as a disagreement in the same check below
+      # rather than as a plausible looking number nobody can question.
+      - name: prepare a subgraph and run it too
+        run: |
+          ./bin/kura-graphs -dataset ca-grqc -nodes 2000 -out graphdata
+          ./bin/kura-graphbench -graph graphdata/ca-grqc-n2000 -bin bin -out results
+      - name: every engine agrees with the reference
+        run: |
+          fail=0
+          for f in results/graph-*.json; do
+            engine=$(jq -r '.engine' "$f")
+            graph=$(jq -r '.dataset.name' "$f")
+            for op in $(jq -r '.query.ops[] | select(.unsupported == "") | select(.correct != 1) | .op' "$f"); do
+              echo "$engine disagrees with the reference on $op over $graph"
+              fail=1
+            done
+          done
+          if [ "$fail" = 1 ]; then
+            echo "an engine is answering a different question from the one the answers describe, so its timings mean nothing"
+            exit 1
+          fi
+          echo "every engine agrees on every operation"
+      - name: show the report
+        run: cat results/graph-report-*.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graph-smoke-results
+          path: results/
+
   # golangci-lint bundles staticcheck, govet, ineffassign, errcheck, unused and
   # more, so it is the main quality gate.
   lint:

@@ -6,19 +6,27 @@ QUERIES ?= queries.txt
 ROOT ?= corpus
 
 GO_RUNNERS := bleve sqlitefts genba
+# The graph runners are written as directory:name, because the binary carries
+# the engine's name in the report and the directory carries the suite it
+# belongs to.
+GO_GRAPHRUNNERS := sqlitegraph:sqlite
 RUST_RUNNERS := tantivy seekstorm
 RUST_VECRUNNERS := exact turbovec hnsw
+RUST_GRAPHRUNNERS := csr petgraph
 RUST := runners/rust
 
 DATA ?= vecdata
 DATASET ?= sift
 METRIC ?= euclidean
 
+GRAPHDATA ?= graphdata
+GRAPH ?= ca-grqc
+
 .PHONY: all
 all: build
 
 .PHONY: build
-build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-vectors $(BIN)/kura-vecbench go-runners rust-runners
+build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench go-runners rust-runners
 
 $(BIN)/kura-bench: $(shell find cmd/kura-bench bench -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-bench
@@ -32,11 +40,22 @@ $(BIN)/kura-vectors: $(shell find cmd/kura-vectors vectors -name '*.go')
 $(BIN)/kura-vecbench: $(shell find cmd/kura-vecbench bench vectors -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-vecbench
 
+$(BIN)/kura-graphs: $(shell find cmd/kura-graphs graphs -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-graphs
+
+$(BIN)/kura-graphbench: $(shell find cmd/kura-graphbench bench graphs -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-graphbench
+
 .PHONY: go-runners
 go-runners:
 	@for r in $(GO_RUNNERS); do \
 		echo "building $$r"; \
 		$(GO) build -o $(BIN)/$$r-runner ./runners/$$r || exit 1; \
+	done
+	@for r in $(GO_GRAPHRUNNERS); do \
+		dir=$${r%%:*}; name=$${r##*:}; \
+		echo "building $$name-graphrunner"; \
+		$(GO) build -o $(BIN)/$$name-graphrunner ./runners/$$dir || exit 1; \
 	done
 
 # The Rust runners are optional. A machine without a Rust toolchain still
@@ -51,6 +70,9 @@ rust-runners:
 		done && \
 		for r in $(RUST_VECRUNNERS); do \
 			cp $(RUST)/target/release/$$r-vecrunner $(BIN)/$$r-vecrunner || exit 1; \
+		done && \
+		for r in $(RUST_GRAPHRUNNERS); do \
+			cp $(RUST)/target/release/$$r-graphrunner $(BIN)/$$r-graphrunner || exit 1; \
 		done; \
 	else \
 		echo "no cargo on this machine, skipping the rust runners"; \
@@ -91,6 +113,16 @@ vectors: $(BIN)/kura-vectors
 .PHONY: vecbench
 vecbench: build
 	$(BIN)/kura-vecbench -dataset $(DATASET) -metric $(METRIC) -data $(DATA) -bin $(BIN) -out results
+
+# Fetches the graph and works out the answers every runner is checked against.
+# Like the corpus and the vectors it only has to happen once per machine.
+.PHONY: graphs
+graphs: $(BIN)/kura-graphs
+	$(BIN)/kura-graphs -dataset $(GRAPH) -out $(GRAPHDATA)
+
+.PHONY: graphbench
+graphbench: build
+	$(BIN)/kura-graphbench -dataset $(GRAPH) -data $(GRAPHDATA) -bin $(BIN) -out results
 
 .PHONY: clean
 clean:

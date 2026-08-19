@@ -1,0 +1,16 @@
+[package]
+name = "petgraph-graphrunner"
+description = "petgraph, the graph data structure library most Rust programs reach for first"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+benchrs.workspace = true
+serde_json.workspace = true
+
+# Pinned exactly, like every other engine here. A benchmark that floats its
+# dependency is a benchmark of whatever was on crates.io the day it ran.
+petgraph = "=0.8.3"

@@ -11,6 +11,11 @@
 # are fetched by kura-vectors from the addresses pinned in vectors/dataset.go.
 /vecdata/
 
+# The graphs, which are 28 thousand edges for ca-GrQc and 69 million for
+# soc-LiveJournal, and are fetched by kura-graphs from the addresses pinned in
+# graphs/dataset.go.
+/graphdata/
+
 # Results are committed on purpose, so results/ is deliberately not ignored.
 
 # Rust build output.
