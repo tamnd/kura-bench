@@ -157,12 +157,27 @@ fn query_phase(
             cfg.limit
         );
     } else if recall < 1.0 {
-        // On SIFT the vectors are small integers, so two base vectors landing at
-        // exactly the same distance from a query happens, and when it does the
-        // ground truth kept one of them and this kept the other. Both answers
-        // are correct and the tie is unresolvable.
+        // A tie is the only innocent explanation, and it is checked rather than
+        // asserted. Saying "this is a tie" in a report without having looked is
+        // how a scan that is quietly missing neighbours goes on being the thing
+        // every other engine is scored against.
+        let (missed, wrong) = disagreements(
+            &index,
+            &queries,
+            &truth,
+            gt_shape.dim,
+            &answers.ids,
+            cfg.k,
+            count,
+        );
+        if wrong > 0 {
+            return Err(format!(
+                "the scan scored {recall:.4} and {wrong} of the {missed} neighbours it did not return are strictly nearer than something it did, so it is not finding the nearest vectors and every recall in this run is measured against a broken baseline"
+            )
+            .into());
+        }
         res.notes = format!(
-            "the scan scored {recall:.4} rather than 1, which is a distance tie: two base vectors sit at exactly the same distance from a query and the ground truth kept the other one"
+            "the scan scored {recall:.4} rather than 1, and all {missed} of the neighbours it did not return sit at exactly the same distance as one it did, so both answers are right and the tie cannot be resolved"
         );
     }
 
@@ -263,6 +278,85 @@ impl Flat {
             norms,
         })
     }
+
+    /// score is what [Flat::nearest] ranks by, for one base vector, with
+    /// nothing abandoned part way.
+    ///
+    /// The search stops adding to a squared distance the moment it cannot win,
+    /// which is worth doing a million times a query and is no use at all when
+    /// the question is what the distance actually came to.
+    fn score(&self, query: &[f32], i: usize) -> f32 {
+        let row = &self.data[i * self.dim..(i + 1) * self.dim];
+        match self.metric {
+            Metric::Euclidean => squared(query, row, f32::INFINITY).unwrap_or(f32::INFINITY),
+            Metric::InnerProduct => -dot(query, row),
+            Metric::Cosine => -dot(query, row) / self.norms[i],
+        }
+    }
+}
+
+/// disagreements counts the true neighbours this scan did not return, and how
+/// many of those it had no right to leave out.
+///
+/// There is one innocent reason a scan can differ from the ground truth: a
+/// distance tie. Several base vectors sit at exactly the same distance from a
+/// query, the answer only has room for k of them, and which k come back is
+/// arbitrary. The ground truth kept one, this kept another, and both are right.
+///
+/// What is not innocent is a true neighbour that is strictly nearer than
+/// something the scan did return, because that is the scan failing at the only
+/// thing it is here to do. Counting the two separately is the difference
+/// between a report that explains a number below one and a report that excuses
+/// it.
+///
+/// The comparison is exact rather than within a tolerance, which on this data
+/// it can afford to be. A SIFT component is a whole number below 256, so a
+/// squared distance over 128 of them is a whole number below sixteen million,
+/// and an f32 carries those without rounding any of them.
+fn disagreements(
+    index: &Flat,
+    queries: &[f32],
+    truth: &[i32],
+    depth: usize,
+    got: &[i32],
+    k: usize,
+    count: usize,
+) -> (usize, usize) {
+    // Nothing to check against. Reporting every neighbour as unexplained is the
+    // honest answer: the run cannot show the difference is harmless, so it
+    // should not be saying that it is.
+    if k == 0 || depth < k || got.len() < count * k || truth.len() < count * depth {
+        return (count * k, count * k);
+    }
+
+    let mut missed = 0;
+    let mut wrong = 0;
+    let known = |id: i32| id >= 0 && (id as usize) < index.count;
+
+    for q in 0..count {
+        let query = &queries[q * index.dim..(q + 1) * index.dim];
+        let mine = &got[q * k..(q + 1) * k];
+        let want = &truth[q * depth..q * depth + k];
+
+        // The furthest thing the scan kept. A true neighbour it left out has to
+        // be at least this far away, or the answer should have made room.
+        let mut worst = f32::NEG_INFINITY;
+        for &id in mine {
+            if known(id) {
+                worst = worst.max(index.score(query, id as usize));
+            }
+        }
+        for &id in want {
+            if mine.contains(&id) {
+                continue;
+            }
+            missed += 1;
+            if !known(id) || index.score(query, id as usize) < worst {
+                wrong += 1;
+            }
+        }
+    }
+    (missed, wrong)
 }
 
 impl Search for Flat {
@@ -358,4 +452,62 @@ fn write_index(path: &Path, dim: usize, count: usize, values: &[f32]) -> std::io
 fn load_queries(cfg: &Config) -> Result<(Vec<f32>, usize), Box<dyn std::error::Error>> {
     let (shape, queries) = data::fvecs(&cfg.query, cfg.queries)?;
     Ok((queries, shape.count))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// flat builds an index in memory, so a test can put vectors at distances it
+    /// chose rather than at whatever a dataset happens to contain.
+    fn flat(dim: usize, rows: &[&[f32]]) -> Flat {
+        Flat {
+            dim,
+            count: rows.len(),
+            data: rows.iter().flat_map(|r| r.iter().copied()).collect(),
+            metric: Metric::Euclidean,
+            norms: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_neighbour_at_the_same_distance_is_a_tie_and_not_a_miss() {
+        // Two base vectors either side of the query at the same distance, and
+        // room in the answer for one of them. Whichever comes back, the other
+        // one is a true neighbour that was left out for a reason.
+        let index = flat(1, &[&[-1.0], &[1.0]]);
+        let (missed, wrong) = disagreements(&index, &[0.0], &[1], 1, &[0], 1, 1);
+        assert_eq!(missed, 1, "the ground truth's neighbour was not returned");
+        assert_eq!(
+            wrong, 0,
+            "it is the same distance away, so nothing is wrong"
+        );
+    }
+
+    #[test]
+    fn a_nearer_neighbour_that_was_missed_is_wrong() {
+        // The ground truth's neighbour sits on the query and the scan came back
+        // with one further away, which no tie can explain.
+        let index = flat(1, &[&[5.0], &[0.0]]);
+        let (missed, wrong) = disagreements(&index, &[0.0], &[1], 1, &[0], 1, 1);
+        assert_eq!(missed, 1);
+        assert_eq!(wrong, 1, "the neighbour it missed was strictly nearer");
+    }
+
+    #[test]
+    fn agreeing_with_the_ground_truth_leaves_nothing_to_explain() {
+        let index = flat(1, &[&[0.0], &[9.0]]);
+        assert_eq!(disagreements(&index, &[0.0], &[0], 1, &[0], 1, 1), (0, 0));
+    }
+
+    #[test]
+    fn ground_truth_that_is_too_shallow_to_check_is_not_called_a_tie() {
+        // Nothing to compare against, so every neighbour counts as unexplained
+        // and the caller refuses the run rather than reporting a tie it never
+        // looked for.
+        let index = flat(1, &[&[0.0], &[9.0]]);
+        let (missed, wrong) = disagreements(&index, &[0.0], &[0], 1, &[0, 1], 2, 1);
+        assert_eq!(missed, 2);
+        assert_eq!(wrong, 2);
+    }
 }
