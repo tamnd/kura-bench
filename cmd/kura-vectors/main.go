@@ -281,7 +281,7 @@ func fetchArchive(d vectors.Dataset, root string, force bool) error {
 }
 
 func missing(want map[string]vectors.File) []string {
-	var out []string
+	out := make([]string, 0, len(want))
 	for member := range want {
 		out = append(out, member)
 	}

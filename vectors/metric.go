@@ -176,7 +176,7 @@ type pair struct {
 // Every metric is turned into something smaller-is-better so that one
 // selection loop serves all three. Ties are broken by the lower identifier,
 // which is arbitrary and is at least the same arbitrary choice every time.
-func topK(best []pair, base []float32, norms []float32, dim, count int, query []float32, depth int, m Metric) []pair {
+func topK(best []pair, base, norms []float32, dim, count int, query []float32, depth int, m Metric) []pair {
 	var qnorm float32 = 1
 	if m == Cosine {
 		var s float64
