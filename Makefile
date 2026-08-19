@@ -26,7 +26,7 @@ GRAPH ?= ca-grqc
 all: build
 
 .PHONY: build
-build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench go-runners rust-runners
+build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench $(BIN)/kura-report go-runners rust-runners
 
 $(BIN)/kura-bench: $(shell find cmd/kura-bench bench -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-bench
@@ -45,6 +45,15 @@ $(BIN)/kura-graphs: $(shell find cmd/kura-graphs graphs -name '*.go')
 
 $(BIN)/kura-graphbench: $(shell find cmd/kura-graphbench bench graphs -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-graphbench
+
+$(BIN)/kura-report: $(shell find cmd/kura-report bench graphs -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-report
+
+# Rebuild every report from the results already on disk, which is what you want
+# after rerunning a single engine.
+.PHONY: report
+report: $(BIN)/kura-report
+	$(BIN)/kura-report -results results
 
 .PHONY: go-runners
 go-runners:
