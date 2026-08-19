@@ -11,11 +11,11 @@
   },
   "build": {
     "usage": {
-      "wall_seconds": 0.001783083,
-      "user_seconds": 0.001022,
-      "sys_seconds": 0.0002859999999999998,
-      "peak_rss_bytes": 3063808,
-      "rss_bytes": 3063808,
+      "wall_seconds": 0.001573125,
+      "user_seconds": 0.001026,
+      "sys_seconds": 0.00025299999999999975,
+      "peak_rss_bytes": 2949120,
+      "rss_bytes": 2949120,
       "read_bytes": 0,
       "write_bytes": 0
     },
@@ -24,23 +24,23 @@
   },
   "open": {
     "usage": {
-      "wall_seconds": 0.000188125,
-      "user_seconds": 0.000018000000000000004,
-      "sys_seconds": 0.00008099999999999991,
-      "peak_rss_bytes": 2473984,
-      "rss_bytes": 2473984,
+      "wall_seconds": 0.000207,
+      "user_seconds": 0.00002099999999999997,
+      "sys_seconds": 0.00010099999999999996,
+      "peak_rss_bytes": 2523136,
+      "rss_bytes": 2523136,
       "read_bytes": 0,
       "write_bytes": 0
     },
-    "resident_bytes": 2473984
+    "resident_bytes": 2523136
   },
   "query": {
     "usage": {
-      "wall_seconds": 0.004532917,
-      "user_seconds": 0.006992999999999999,
-      "sys_seconds": 0.0014030000000000002,
-      "peak_rss_bytes": 4554752,
-      "rss_bytes": 4554752,
+      "wall_seconds": 0.008156917,
+      "user_seconds": 0.007043,
+      "sys_seconds": 0.0017720000000000001,
+      "peak_rss_bytes": 4325376,
+      "rss_bytes": 4325376,
       "read_bytes": 0,
       "write_bytes": 0
     },
@@ -58,9 +58,9 @@
         "concurrent": {
           "workers": 10,
           "queries": 1000,
-          "seconds": 0.000189459,
-          "median_ms": 0.000041,
-          "p99_ms": 0.000084
+          "seconds": 0.000268458,
+          "median_ms": 0,
+          "p99_ms": 0.000083
         }
       },
       {
@@ -69,16 +69,16 @@
         "correct": 1,
         "mismatches": 0,
         "min_ms": 0.000041,
-        "median_ms": 0.000125,
-        "p90_ms": 0.000542,
-        "p99_ms": 0.001542,
-        "max_ms": 0.001917,
+        "median_ms": 0.000166,
+        "p90_ms": 0.0006659999999999999,
+        "p99_ms": 0.001667,
+        "max_ms": 0.0020829999999999998,
         "concurrent": {
           "workers": 10,
           "queries": 100,
-          "seconds": 0.000085709,
-          "median_ms": 0.000125,
-          "p99_ms": 0.002
+          "seconds": 0.003521959,
+          "median_ms": 0.000166,
+          "p99_ms": 0.001958
         }
       },
       {
@@ -86,17 +86,17 @@
         "runs": 100,
         "correct": 1,
         "mismatches": 0,
-        "min_ms": 0.000083,
-        "median_ms": 0.014667,
-        "p90_ms": 0.064125,
-        "p99_ms": 0.068083,
-        "max_ms": 0.06883299999999999,
+        "min_ms": 0.000041,
+        "median_ms": 0.014875000000000001,
+        "p90_ms": 0.066833,
+        "p99_ms": 0.07012499999999999,
+        "max_ms": 0.077917,
         "concurrent": {
           "workers": 10,
           "queries": 100,
-          "seconds": 0.000542667,
-          "median_ms": 0.020084,
-          "p99_ms": 0.13549999999999998
+          "seconds": 0.000590416,
+          "median_ms": 0.023958,
+          "p99_ms": 0.239709
         }
       },
       {
@@ -104,22 +104,22 @@
         "runs": 10,
         "correct": 1,
         "mismatches": 0,
-        "min_ms": 0.06375,
-        "median_ms": 0.066,
-        "p90_ms": 0.06837499999999999,
-        "p99_ms": 0.06929099999999999,
-        "max_ms": 0.06929099999999999
+        "min_ms": 0.0635,
+        "median_ms": 0.064458,
+        "p90_ms": 0.065875,
+        "p99_ms": 0.068459,
+        "max_ms": 0.068459
       },
       {
         "op": "pagerank",
         "runs": 1,
         "correct": 1,
         "mismatches": 0,
-        "min_ms": 0.6203339999999999,
-        "median_ms": 0.6203339999999999,
-        "p90_ms": 0.6203339999999999,
-        "p99_ms": 0.6203339999999999,
-        "max_ms": 0.6203339999999999
+        "min_ms": 0.6084579999999999,
+        "median_ms": 0.6084579999999999,
+        "p90_ms": 0.6084579999999999,
+        "p99_ms": 0.6084579999999999,
+        "max_ms": 0.6084579999999999
       }
     ]
   },
@@ -130,7 +130,7 @@
     "cpu": "Apple M4",
     "cores": 10,
     "memory_bytes": 25769803776,
-    "load_before": 18.76,
+    "load_before": 16.32,
     "memory_free_bytes": 0,
     "dedicated": false
   }

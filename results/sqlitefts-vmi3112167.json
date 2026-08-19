@@ -1,6 +1,6 @@
 {
   "engine": "sqlite-fts5",
-  "version": "v1.56.0",
+  "version": "v1.57.0",
   "language": "go",
   "corpus": {
     "documents": 82791,
@@ -8,188 +8,188 @@
   },
   "index": {
     "usage": {
-      "wall_seconds": 115.437786817,
-      "user_seconds": 69.764804,
-      "sys_seconds": 37.650118,
-      "peak_rss_bytes": 69259264,
-      "rss_bytes": 36806656,
-      "read_bytes": 51556352,
-      "write_bytes": 2546745344
+      "wall_seconds": 147.860417772,
+      "user_seconds": 75.314585,
+      "sys_seconds": 41.540344,
+      "peak_rss_bytes": 65703936,
+      "rss_bytes": 33333248,
+      "read_bytes": 550170624,
+      "write_bytes": 2537345024
     },
     "bytes": 680353792,
     "files": 3
   },
   "open": {
     "usage": {
-      "wall_seconds": 0.052571949,
-      "user_seconds": 0.030177,
-      "sys_seconds": 0.021865,
-      "peak_rss_bytes": 12886016,
-      "rss_bytes": 13037568,
+      "wall_seconds": 0.106165737,
+      "user_seconds": 0.049503,
+      "sys_seconds": 0.055659,
+      "peak_rss_bytes": 14159872,
+      "rss_bytes": 14262272,
       "read_bytes": 0,
       "write_bytes": 32768
     },
-    "resident_bytes": 13037568
+    "resident_bytes": 14262272
   },
   "search": {
     "usage": {
-      "wall_seconds": 32.490099444,
-      "user_seconds": 26.777292,
-      "sys_seconds": 3.735794,
-      "peak_rss_bytes": 16863232,
-      "rss_bytes": 16424960,
+      "wall_seconds": 33.159389829,
+      "user_seconds": 28.039029,
+      "sys_seconds": 4.157325,
+      "peak_rss_bytes": 17215488,
+      "rss_bytes": 16519168,
       "read_bytes": 0,
-      "write_bytes": 0
+      "write_bytes": 4096
     },
     "queries": [
       {
         "query": "memory allocation",
         "hits": 4753,
         "runs": 20,
-        "min_ms": 24.318144,
-        "median_ms": 27.532269,
-        "p90_ms": 48.875554,
-        "p99_ms": 64.361051,
-        "max_ms": 64.361051
+        "min_ms": 28.354901,
+        "median_ms": 37.596952,
+        "p90_ms": 134.325677,
+        "p99_ms": 335.601236,
+        "max_ms": 335.601236
       },
       {
         "query": "return value",
         "hits": 32997,
         "runs": 20,
-        "min_ms": 158.669578,
-        "median_ms": 212.205006,
-        "p90_ms": 344.384067,
-        "p99_ms": 593.647945,
-        "max_ms": 593.647945
+        "min_ms": 163.017433,
+        "median_ms": 200.814227,
+        "p90_ms": 326.144012,
+        "p99_ms": 765.647426,
+        "max_ms": 765.647426
       },
       {
         "query": "error handling",
         "hits": 31008,
         "runs": 20,
-        "min_ms": 121.579851,
-        "median_ms": 143.606371,
-        "p90_ms": 312.450328,
-        "p99_ms": 438.036893,
-        "max_ms": 438.036893
+        "min_ms": 127.950696,
+        "median_ms": 185.88109,
+        "p90_ms": 254.765397,
+        "p99_ms": 364.922255,
+        "max_ms": 364.922255
       },
       {
         "query": "deadlock detection",
         "hits": 804,
         "runs": 20,
-        "min_ms": 6.694549,
-        "median_ms": 7.007152,
-        "p90_ms": 7.494731,
-        "p99_ms": 8.205136,
-        "max_ms": 8.205136
+        "min_ms": 6.502078,
+        "median_ms": 7.026332,
+        "p90_ms": 7.445913,
+        "p99_ms": 8.516173,
+        "max_ms": 8.516173
       },
       {
         "query": "reference counting",
         "hits": 4317,
         "runs": 20,
-        "min_ms": 19.739644,
-        "median_ms": 39.364222,
-        "p90_ms": 64.391078,
-        "p99_ms": 77.950844,
-        "max_ms": 77.950844
+        "min_ms": 19.853381,
+        "median_ms": 20.886411,
+        "p90_ms": 29.60476,
+        "p99_ms": 38.041363,
+        "max_ms": 38.041363
       },
       {
         "query": "buffer overflow check",
         "hits": 19602,
         "runs": 20,
-        "min_ms": 85.764189,
-        "median_ms": 107.530924,
-        "p90_ms": 179.826167,
-        "p99_ms": 305.964873,
-        "max_ms": 305.964873
+        "min_ms": 84.223152,
+        "median_ms": 114.780796,
+        "p90_ms": 201.368906,
+        "p99_ms": 301.551763,
+        "max_ms": 301.551763
       },
       {
         "query": "thread pool shutdown",
         "hits": 3763,
         "runs": 20,
-        "min_ms": 26.087125,
-        "median_ms": 33.870234,
-        "p90_ms": 127.311444,
-        "p99_ms": 151.403718,
-        "max_ms": 151.403718
+        "min_ms": 28.247818,
+        "median_ms": 36.794689,
+        "p90_ms": 118.716508,
+        "p99_ms": 275.227663,
+        "max_ms": 275.227663
       },
       {
         "query": "mmap_region",
         "hits": 1373,
         "runs": 20,
-        "min_ms": 11.894108,
-        "median_ms": 18.313774,
-        "p90_ms": 38.068045,
-        "p99_ms": 56.578966,
-        "max_ms": 56.578966
+        "min_ms": 12.075681,
+        "median_ms": 12.754383,
+        "p90_ms": 15.559859,
+        "p99_ms": 83.004804,
+        "max_ms": 83.004804
       },
       {
         "query": "kasan",
         "hits": 9,
         "runs": 20,
-        "min_ms": 0.763003,
-        "median_ms": 0.826401,
-        "p90_ms": 0.890552,
-        "p99_ms": 1.053566,
-        "max_ms": 1.053566
+        "min_ms": 0.668332,
+        "median_ms": 0.810637,
+        "p90_ms": 3.615632,
+        "p99_ms": 5.110502,
+        "max_ms": 5.110502
       },
       {
         "query": "tsan_atomic",
         "hits": 2394,
         "runs": 20,
-        "min_ms": 12.126802,
-        "median_ms": 15.424935,
-        "p90_ms": 36.213705,
-        "p99_ms": 58.950059,
-        "max_ms": 58.950059
+        "min_ms": 12.207667,
+        "median_ms": 12.942492,
+        "p90_ms": 16.412775,
+        "p99_ms": 24.906346,
+        "max_ms": 24.906346
       },
       {
         "query": "backwards compatibility guarantee",
         "hits": 2473,
         "runs": 20,
-        "min_ms": 13.425645,
-        "median_ms": 13.947288,
-        "p90_ms": 19.992875,
-        "p99_ms": 29.410745,
-        "max_ms": 29.410745
+        "min_ms": 14.115905,
+        "median_ms": 19.526274,
+        "p90_ms": 25.842627,
+        "p99_ms": 32.785364,
+        "max_ms": 32.785364
       },
       {
         "query": "deprecated in favour of",
         "hits": 53302,
         "runs": 20,
-        "min_ms": 267.203461,
-        "median_ms": 333.892887,
-        "p90_ms": 531.525914,
-        "p99_ms": 743.228049,
-        "max_ms": 743.228049
+        "min_ms": 262.486286,
+        "median_ms": 327.108864,
+        "p90_ms": 681.349161,
+        "p99_ms": 791.549833,
+        "max_ms": 791.549833
       },
       {
         "query": "the",
         "hits": 51086,
         "runs": 20,
-        "min_ms": 236.726078,
-        "median_ms": 318.361329,
-        "p90_ms": 565.081596,
-        "p99_ms": 949.771176,
-        "max_ms": 949.771176
+        "min_ms": 235.578426,
+        "median_ms": 284.679756,
+        "p90_ms": 586.346864,
+        "p99_ms": 733.238384,
+        "max_ms": 733.238384
       }
     ],
     "concurrent": {
       "workers": 13,
       "queries": 260,
-      "seconds": 38.517985507,
-      "median_ms": 770.704307,
-      "p99_ms": 8884.414369
+      "seconds": 31.082875226,
+      "median_ms": 629.911478,
+      "p99_ms": 6357.302822
     }
   },
   "update": {
     "usage": {
-      "wall_seconds": 19.096086769,
-      "user_seconds": 10.359877000000001,
-      "sys_seconds": 5.292915,
-      "peak_rss_bytes": 109355008,
-      "rss_bytes": 59420672,
+      "wall_seconds": 19.859668019,
+      "user_seconds": 11.904427,
+      "sys_seconds": 6.750697,
+      "peak_rss_bytes": 109391872,
+      "rss_bytes": 66412544,
       "read_bytes": 0,
-      "write_bytes": 452194304
+      "write_bytes": 447496192
     },
     "documents": 5000,
     "bytes": 42053514,
@@ -202,8 +202,8 @@
     "cpu": "AMD EPYC Processor (with IBPB)",
     "cores": 6,
     "memory_bytes": 12541493248,
-    "load_before": 9.73,
-    "memory_free_bytes": 6668169216,
+    "load_before": 9.64,
+    "memory_free_bytes": 7457636352,
     "dedicated": false
   }
 }
