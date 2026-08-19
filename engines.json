@@ -113,7 +113,7 @@
       "registry": "ours",
       "package": "github.com/tamnd/genba",
       "source": "https://github.com/tamnd/genba",
-      "note": "Ours. Pinned to a commit rather than a tag until there is a release to pin to."
+      "note": "Ours. Pinned to a commit rather than a tag until there is a release to pin to. It drops stopwords from a query before running it, which no other engine here does, so its hit counts on a query containing one are lower and its latencies for that query are not comparable."
     }
   ]
 }

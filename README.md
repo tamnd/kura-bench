@@ -140,6 +140,7 @@ A benchmark where each subject brings its own stopwatch measures the stopwatches
 
 Queries are normalised to OR across every engine so that hit counts are comparable.
 Bleve is told `MatchQueryOperatorOr`, FTS5 gets an explicit `OR` between terms because a bare list of terms in FTS5 means AND, and the others already score every term.
+Genba is the exception and says so in its own results: it drops stopwords from a query before it runs, so on a query containing one it matches fewer documents than the rest and its latency for that query is the cost of a smaller search.
 Every engine stores the document body, so the index size comparison is like for like.
 
 ## Running it
