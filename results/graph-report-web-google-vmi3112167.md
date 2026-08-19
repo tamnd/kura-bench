@@ -23,6 +23,7 @@ The edge list is 38.9 MB as pairs of uint32, which is what the store sizes below
 | csr | 0.1.0 | agrees | agrees | agrees | agrees | agrees |
 | ladybug | 0.19.1 | agrees | agrees | agrees | 20.0% agree | cannot |
 | petgraph | 0.8.3 | agrees | agrees | agrees | agrees | agrees |
+| sqlite | v1.56.0 | ran out of time | ran out of time | ran out of time | ran out of time | ran out of time |
 
 The answers were worked out separately, in Go, by walking the same edge list the plainest way there is.
 Agreement between that and an engine is two independent implementations landing on the same numbers, which is the only reason the timings below are worth reading.
@@ -34,6 +35,7 @@ Agreement between that and an engine is two independent implementations landing 
 | csr | 3.9 s | 1,310,815 | 3.6 | 0.9x | 113.0 MB |
 | ladybug | 13.8 s | 370,730 | 25.5 | 1.8x | 672.8 MB |
 | petgraph | 4.2 s | 1,205,947 | 3.9 | 0.9x | 165.5 MB |
+| sqlite | 1m13s | 69,889 | 63.2 | 0.9x | 574.3 MB |
 
 This is the cost of getting a graph into the store in the first place, which on a large one is the largest number in this report.
 
@@ -44,6 +46,7 @@ This is the cost of getting a graph into the store in the first place, which on 
 | csr | 29.5 MB | 1 | 6.1 | 0.76x |
 | ladybug | 175.7 MB | 3 | 36.1 | 4.51x |
 | petgraph | 38.9 MB | 1 | 8.0 | 1.00x |
+| sqlite | 161.5 MB | 3 | 33.2 | 4.15x |
 
 Below one means the store is keeping less than the eight bytes an edge arrived as, which is what a dense adjacency buys.
 Above one is the cost of an index, a property store or a page layout, and it should be buying something back in the tables below.
@@ -69,6 +72,7 @@ One hop out of one node, the cheapest thing a graph store does and the one it do
 | csr | 1,000 | 1.2 us | 1.9 us | 3.7 us | 50.1 us | 196,013 | 6 in flight |
 | ladybug | 1,000 | 6.81 ms | 22.78 ms | 104.16 ms | 246.18 ms | 200 | 6 in flight |
 | petgraph | 1,000 | 1.2 us | 6.1 us | 10.1 us | 18.5 us | 65,626 | 6 in flight |
+| sqlite | ran out of time | | | | | | |
 
 ### two-hop
 
@@ -79,6 +83,7 @@ The distinct nodes within two hops, which is a friend of a friend, and the opera
 | csr | 100 | 23.4 us | 160.8 us | 259.7 us | 374.1 us | 2,443 | 6 in flight |
 | ladybug | 100 | 12.67 ms | 31.04 ms | 172.80 ms | 173.23 ms | 124 | 6 in flight |
 | petgraph | 100 | 51.1 us | 734.5 us | 1.92 ms | 2.56 ms | 144 | 6 in flight |
+| sqlite | ran out of time | | | | | | |
 
 ### shortest-path
 
@@ -89,6 +94,7 @@ The hop count between two nodes, or nothing when they are not connected, which c
 | csr | 100 | 67.31 ms | 261.87 ms | 530.76 ms | 875.55 ms | 25 | 6 in flight |
 | ladybug | 100 | 901.08 ms | 2.51 s | 3.17 s | 3.52 s | 1 | 6 in flight |
 | petgraph | 100 | 85.53 ms | 448.89 ms | 1.28 s | 1.38 s | 12 | 6 in flight |
+| sqlite | ran out of time | | | | | | |
 
 ### bfs
 
@@ -99,6 +105,7 @@ The whole reachable set from one node, which touches everything and cannot be he
 | csr | 10 | 216.04 ms | 322.58 ms | 436.45 ms | 436.45 ms | 4 | one at a time |
 | ladybug | 10 | 4.21 s | 5.48 s | 6.39 s | 6.39 s | 0 | one at a time |
 | petgraph | 10 | 248.70 ms | 847.12 ms | 850.47 ms | 850.47 ms | 4 | one at a time |
+| sqlite | ran out of time | | | | | | |
 
 ### pagerank
 
@@ -109,6 +116,7 @@ The whole graph, several times over, which is the analytics workload rather than
 | csr | 1 | 2.98 s | 2.98 s | 2.98 s | 2.98 s | 0 | one at a time |
 | ladybug | | | | | | | its PageRank lives in an extension that is downloaded at first use, and a benchmark that reaches the network mid run is measuring the network |
 | petgraph | 1 | 8.04 s | 8.04 s | 8.04 s | 8.04 s | 0 | one at a time |
+| sqlite | ran out of time | | | | | | |
 
 The maximum matters more here than in the other suites.
 Most nodes in a real graph have a handful of neighbours and a few have a hundred thousand, so the median says what the common case costs and the maximum says what a hub costs.
@@ -118,4 +126,5 @@ A cell that says below the clock is a lookup that finished inside one tick of th
 
 - ladybug: a property graph database reached through its C API, loaded with COPY from a CSV the way its own documentation loads a graph, and queried in Cypher rather than by walking the adjacency from the runner, and its variable length patterns take an upper bound of at most 30 hops, which this graph is deeper than, so the traversals were cut off there and the correctness table says so rather than the timings quietly being for a smaller job
 - petgraph: petgraph is an in memory library with no on disk form, so the build phase writes the edges back out and the cold start is the graph being constructed again, so its open figure is a rebuild rather than a file being mapped
+- sqlite: the query phase did not finish within 45m0s, which is why its rows are empty rather than the engine being absent from the run. The edges live in one table with a covering index on both columns, and the traversals walk it a level at a time from Go, which is how a relational store is used as a graph in practice
 
