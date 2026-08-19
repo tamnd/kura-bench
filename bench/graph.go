@@ -223,12 +223,30 @@ func MergeGraph(build, query GraphResult) GraphResult {
 	// The build process never reads the seed file, so that half of the dataset
 	// line comes from the process that actually read it.
 	out.Dataset.Seeds = query.Dataset.Seeds
-	// Two notes are two sentences that were never written to sit together, so
-	// they are joined with something that keeps them apart on the page.
-	if query.Notes != "" && query.Notes != out.Notes {
-		out.Notes = strings.TrimSpace(strings.Trim(out.Notes+"; "+query.Notes, "; "))
-	}
+	out.Notes = joinNotes(build.Notes, query.Notes)
 	return out
+}
+
+// joinNotes puts the two processes' notes together.
+//
+// Usually they are the same sentence, written by the same runner twice. When
+// they are not, it is because the query process found out something the build
+// process could not know yet, and what it says then starts with what it said
+// before and goes on. So the longer of the two wins when one contains the
+// other, and only genuinely different notes are joined, with something between
+// them that keeps two sentences apart on the page.
+func joinNotes(build, query string) string {
+	switch {
+	case query == "":
+		return build
+	case build == "":
+		return query
+	case strings.Contains(query, build):
+		return query
+	case strings.Contains(build, query):
+		return build
+	}
+	return strings.TrimSpace(build + "; " + query)
 }
 
 // GraphReport renders a set of graph results as markdown.
