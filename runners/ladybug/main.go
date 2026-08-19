@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/tamnd/kura-bench/runner"
@@ -53,6 +54,11 @@ type engine struct {
 	// the engine plans and executes on, so sharing one across the throughput
 	// pass would measure a queue rather than the database.
 	pool chan *conn
+
+	// Set when a traversal came back at exactly the depth bound, which is the
+	// one case where this runner can tell that it was handed a truncated
+	// answer rather than a wrong one. See Note.
+	capped atomic.Bool
 }
 
 func (e *engine) Describe() runner.Info {
@@ -64,7 +70,11 @@ func (e *engine) Describe() runner.Info {
 }
 
 func (e *engine) Note() string {
-	return "a property graph database reached through its C API, loaded with COPY from a CSV the way its own documentation loads a graph, and queried in Cypher rather than by walking the adjacency from the runner"
+	note := "a property graph database reached through its C API, loaded with COPY from a CSV the way its own documentation loads a graph, and queried in Cypher rather than by walking the adjacency from the runner"
+	if e.capped.Load() {
+		note += fmt.Sprintf(", and its variable length patterns take an upper bound of at most %d hops, which this graph is deeper than, so the traversals were cut off there and the correctness table says so rather than the timings quietly being for a smaller job", maxDepth)
+	}
+	return note
 }
 
 // Cannot explains the one empty cell in this row.
@@ -232,6 +242,11 @@ func (e *engine) BFS(node uint32) (int64, int64) {
 	depth, ok, err := rows.next()
 	if err != nil || !ok {
 		return -1, -1
+	}
+	// A search that stopped exactly at the bound did not stop because it ran
+	// out of graph, so what came back is a prefix of the answer.
+	if depth >= maxDepth {
+		e.capped.Store(true)
 	}
 	// The seed is reachable from itself and the traversal does not return it,
 	// so it is added back here. Every other runner counts it.
