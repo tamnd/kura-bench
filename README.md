@@ -259,6 +259,19 @@ Useful flags:
 - `-deadline 30m` gives up on a phase that runs longer than that and reports the engine as not having finished. There is no limit by default, because a slow number is worth having and a missing row is not, and it exists for the other case: an engine whose query cost is proportional to the match set does not stop, it just keeps going, and one of those will hold a whole run for as long as you let it.
 - `-keep` leaves the built stores in place instead of deleting them.
 
+## Rebuilding a report
+
+Each orchestrator writes its report at the end of its own run, from the engines that run asked for.
+That is fine while a run is happening and wrong afterwards, because rerunning one engine, which is the normal thing to do when a pin moves or a bug is fixed, overwrites the machine's report with a table of one row.
+The result files are untouched, so nothing is actually lost, but the document a person reads is now missing every rival.
+
+```sh
+make report
+```
+
+That reads every result file in `results`, groups them by suite, dataset and machine, and writes each report from everything that machine has produced.
+It runs no engines and opens no network connections, so it is safe to run on a laptop against results collected on a server.
+
 ## The query set
 
 `queries.txt` is grouped by intent, because the interesting thing is not the average, it is where the engines disagree.

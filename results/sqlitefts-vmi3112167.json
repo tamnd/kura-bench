@@ -1,0 +1,209 @@
+{
+  "engine": "sqlite-fts5",
+  "version": "v1.56.0",
+  "language": "go",
+  "corpus": {
+    "documents": 82791,
+    "bytes": 486518873
+  },
+  "index": {
+    "usage": {
+      "wall_seconds": 115.437786817,
+      "user_seconds": 69.764804,
+      "sys_seconds": 37.650118,
+      "peak_rss_bytes": 69259264,
+      "rss_bytes": 36806656,
+      "read_bytes": 51556352,
+      "write_bytes": 2546745344
+    },
+    "bytes": 680353792,
+    "files": 3
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.052571949,
+      "user_seconds": 0.030177,
+      "sys_seconds": 0.021865,
+      "peak_rss_bytes": 12886016,
+      "rss_bytes": 13037568,
+      "read_bytes": 0,
+      "write_bytes": 32768
+    },
+    "resident_bytes": 13037568
+  },
+  "search": {
+    "usage": {
+      "wall_seconds": 32.490099444,
+      "user_seconds": 26.777292,
+      "sys_seconds": 3.735794,
+      "peak_rss_bytes": 16863232,
+      "rss_bytes": 16424960,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "queries": [
+      {
+        "query": "memory allocation",
+        "hits": 4753,
+        "runs": 20,
+        "min_ms": 24.318144,
+        "median_ms": 27.532269,
+        "p90_ms": 48.875554,
+        "p99_ms": 64.361051,
+        "max_ms": 64.361051
+      },
+      {
+        "query": "return value",
+        "hits": 32997,
+        "runs": 20,
+        "min_ms": 158.669578,
+        "median_ms": 212.205006,
+        "p90_ms": 344.384067,
+        "p99_ms": 593.647945,
+        "max_ms": 593.647945
+      },
+      {
+        "query": "error handling",
+        "hits": 31008,
+        "runs": 20,
+        "min_ms": 121.579851,
+        "median_ms": 143.606371,
+        "p90_ms": 312.450328,
+        "p99_ms": 438.036893,
+        "max_ms": 438.036893
+      },
+      {
+        "query": "deadlock detection",
+        "hits": 804,
+        "runs": 20,
+        "min_ms": 6.694549,
+        "median_ms": 7.007152,
+        "p90_ms": 7.494731,
+        "p99_ms": 8.205136,
+        "max_ms": 8.205136
+      },
+      {
+        "query": "reference counting",
+        "hits": 4317,
+        "runs": 20,
+        "min_ms": 19.739644,
+        "median_ms": 39.364222,
+        "p90_ms": 64.391078,
+        "p99_ms": 77.950844,
+        "max_ms": 77.950844
+      },
+      {
+        "query": "buffer overflow check",
+        "hits": 19602,
+        "runs": 20,
+        "min_ms": 85.764189,
+        "median_ms": 107.530924,
+        "p90_ms": 179.826167,
+        "p99_ms": 305.964873,
+        "max_ms": 305.964873
+      },
+      {
+        "query": "thread pool shutdown",
+        "hits": 3763,
+        "runs": 20,
+        "min_ms": 26.087125,
+        "median_ms": 33.870234,
+        "p90_ms": 127.311444,
+        "p99_ms": 151.403718,
+        "max_ms": 151.403718
+      },
+      {
+        "query": "mmap_region",
+        "hits": 1373,
+        "runs": 20,
+        "min_ms": 11.894108,
+        "median_ms": 18.313774,
+        "p90_ms": 38.068045,
+        "p99_ms": 56.578966,
+        "max_ms": 56.578966
+      },
+      {
+        "query": "kasan",
+        "hits": 9,
+        "runs": 20,
+        "min_ms": 0.763003,
+        "median_ms": 0.826401,
+        "p90_ms": 0.890552,
+        "p99_ms": 1.053566,
+        "max_ms": 1.053566
+      },
+      {
+        "query": "tsan_atomic",
+        "hits": 2394,
+        "runs": 20,
+        "min_ms": 12.126802,
+        "median_ms": 15.424935,
+        "p90_ms": 36.213705,
+        "p99_ms": 58.950059,
+        "max_ms": 58.950059
+      },
+      {
+        "query": "backwards compatibility guarantee",
+        "hits": 2473,
+        "runs": 20,
+        "min_ms": 13.425645,
+        "median_ms": 13.947288,
+        "p90_ms": 19.992875,
+        "p99_ms": 29.410745,
+        "max_ms": 29.410745
+      },
+      {
+        "query": "deprecated in favour of",
+        "hits": 53302,
+        "runs": 20,
+        "min_ms": 267.203461,
+        "median_ms": 333.892887,
+        "p90_ms": 531.525914,
+        "p99_ms": 743.228049,
+        "max_ms": 743.228049
+      },
+      {
+        "query": "the",
+        "hits": 51086,
+        "runs": 20,
+        "min_ms": 236.726078,
+        "median_ms": 318.361329,
+        "p90_ms": 565.081596,
+        "p99_ms": 949.771176,
+        "max_ms": 949.771176
+      }
+    ],
+    "concurrent": {
+      "workers": 13,
+      "queries": 260,
+      "seconds": 38.517985507,
+      "median_ms": 770.704307,
+      "p99_ms": 8884.414369
+    }
+  },
+  "update": {
+    "usage": {
+      "wall_seconds": 19.096086769,
+      "user_seconds": 10.359877000000001,
+      "sys_seconds": 5.292915,
+      "peak_rss_bytes": 109355008,
+      "rss_bytes": 59420672,
+      "read_bytes": 0,
+      "write_bytes": 452194304
+    },
+    "documents": 5000,
+    "bytes": 42053514,
+    "index_bytes_after": 738480128
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "amd64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 9.73,
+    "memory_free_bytes": 6668169216,
+    "dedicated": false
+  }
+}
