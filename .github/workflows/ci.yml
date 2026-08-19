@@ -108,6 +108,12 @@ jobs:
   # corpus builder, every runner, two processes per engine, the merge and the
   # report. A harness that only ever ran on a developer's laptop is a harness
   # that has silently stopped working.
+  #
+  # Every smoke job writes to smoke/ rather than to results/, which holds the
+  # real numbers from the servers and is checked in. A run that wrote there
+  # would put a minute of shared runner next to hours of a quiet machine, and
+  # the checks below would be reading the committed files as well as the ones
+  # this run just produced.
   smoke:
     runs-on: ubuntu-latest
     steps:
@@ -126,13 +132,13 @@ jobs:
       - name: build a corpus from this checkout
         run: ./bin/kura-corpus -repo kura-bench=. -out corpus.jsonl
       - name: run every engine
-        run: ./bin/kura-bench -corpus corpus.jsonl -queries queries.txt -bin bin -out results -repeat 3
+        run: ./bin/kura-bench -corpus corpus.jsonl -queries queries.txt -bin bin -out smoke -repeat 3
       - name: show the report
-        run: cat results/report-*.md
+        run: cat smoke/report-*.md
       - uses: actions/upload-artifact@v4
         with:
           name: smoke-results
-          path: results/
+          path: smoke/
 
   # The same thing for the vector suite, on siftsmall.
   #
@@ -168,13 +174,13 @@ jobs:
       - name: euclidean
         run: >
           ./bin/kura-vecbench -dataset siftsmall -metric euclidean
-          -data vecdata -bin bin -out results -queries 100
+          -data vecdata -bin bin -out smoke -queries 100
           -engines exact,hnsw
       # The one figure in this suite that has a known right answer, so it is
       # asserted rather than printed and left for somebody to notice.
       - name: the exact scan agrees with the published ground truth
         run: |
-          recall=$(jq '.search.points[0].recall' results/vec-exact-siftsmall-euclidean-*.json)
+          recall=$(jq '.search.points[0].recall' smoke/vec-exact-siftsmall-euclidean-*.json)
           echo "the exact scan scored $recall"
           if [ "$recall" != "1" ]; then
             echo "it has to be 1, so the dataset is being read wrongly and every other figure is wrong the same way"
@@ -183,14 +189,14 @@ jobs:
       - name: inner product
         run: >
           ./bin/kura-vecbench -dataset siftsmall -metric inner-product
-          -data vecdata -bin bin -out results -queries 100
+          -data vecdata -bin bin -out smoke -queries 100
           -engines exact,turbovec
       - name: show the reports
-        run: cat results/vector-report-*.md
+        run: cat smoke/vector-report-*.md
       - uses: actions/upload-artifact@v4
         with:
           name: vector-smoke-results
-          path: results/
+          path: smoke/
 
   # The same thing for the graph suite, on ca-GrQc.
   #
@@ -237,18 +243,18 @@ jobs:
       - name: run every engine
         run: >
           ./bin/kura-graphbench -dataset ca-grqc
-          -data graphdata -bin bin -out results
+          -data graphdata -bin bin -out smoke
       # The subgraph path has its own answers worked out on the smaller graph,
       # so a mistake in it shows up as a disagreement in the same check below
       # rather than as a plausible looking number nobody can question.
       - name: prepare a subgraph and run it too
         run: |
           ./bin/kura-graphs -dataset ca-grqc -nodes 2000 -out graphdata
-          ./bin/kura-graphbench -graph graphdata/ca-grqc-n2000 -bin bin -out results
+          ./bin/kura-graphbench -graph graphdata/ca-grqc-n2000 -bin bin -out smoke
       - name: every engine agrees with the reference
         run: |
           fail=0
-          for f in results/graph-*.json; do
+          for f in smoke/graph-*.json; do
             engine=$(jq -r '.engine' "$f")
             graph=$(jq -r '.dataset.name' "$f")
             for op in $(jq -r '.query.ops[] | select(.unsupported == "") | select(.correct != 1) | .op' "$f"); do
@@ -262,11 +268,11 @@ jobs:
           fi
           echo "every engine agrees on every operation"
       - name: show the report
-        run: cat results/graph-report-*.md
+        run: cat smoke/graph-report-*.md
       - uses: actions/upload-artifact@v4
         with:
           name: graph-smoke-results-${{ matrix.os }}
-          path: results/
+          path: smoke/
 
   # golangci-lint bundles staticcheck, govet, ineffassign, errcheck, unused and
   # more, so it is the main quality gate.
