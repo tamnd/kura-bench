@@ -62,10 +62,10 @@ func TestEachSuiteGetsItsOwnReport(t *testing.T) {
 	writeResult(t, dir, "tantivy-srv.json", bench.Result{
 		Engine: "tantivy", Machine: bench.Machine{Host: "srv"},
 	})
-	writeResult(t, dir, "vector-exact-sift-srv.json", bench.VectorResult{
+	writeResult(t, dir, "vec-exact-sift-euclidean-srv.json", bench.VectorResult{
 		Engine:  "exact",
 		Machine: bench.Machine{Host: "srv"},
-		Dataset: bench.DatasetStats{Name: "sift"},
+		Dataset: bench.DatasetStats{Name: "sift", Metric: "euclidean"},
 	})
 	writeResult(t, dir, "graph-csr-ca-grqc-srv.json", bench.GraphResult{
 		Engine:  "csr",
@@ -78,11 +78,60 @@ func TestEachSuiteGetsItsOwnReport(t *testing.T) {
 	}
 	for _, name := range []string{
 		"report-srv.md",
-		"vector-report-sift-srv.md",
+		"vector-report-sift-euclidean-srv.md",
 		"graph-report-ca-grqc-srv.md",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Errorf("%s was not written: %v", name, err)
+		}
+	}
+}
+
+// The defect this was written for: the vector suite writes vec-<engine>-... and
+// this command looked for vector-<engine>-..., so every vector result fell
+// through to the text bucket, decoded into a text result with every number
+// zero, and was published as an engine that indexed nothing.
+func TestAVectorResultDoesNotEndUpInTheTextReport(t *testing.T) {
+	dir := t.TempDir()
+	writeResult(t, dir, "tantivy-srv.json", bench.Result{
+		Engine: "tantivy", Machine: bench.Machine{Host: "srv"},
+	})
+	writeResult(t, dir, "vec-turbovec-sift-inner-product-srv.json", bench.VectorResult{
+		Engine:  "turbovec",
+		Machine: bench.Machine{Host: "srv"},
+		Dataset: bench.DatasetStats{Name: "sift", Metric: "inner-product"},
+	})
+
+	if err := run(dir); err != nil {
+		t.Fatal(err)
+	}
+	if body := readReport(t, filepath.Join(dir, "report-srv.md")); strings.Contains(body, "turbovec") {
+		t.Errorf("a vector engine is in the text report:\n%s", body)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "vector-report-sift-inner-product-srv.md")); err != nil {
+		t.Errorf("the vector report was not written: %v", err)
+	}
+}
+
+// Two metrics over one dataset are two runs measured against two different
+// answers, and a single report holding both would be comparing recalls that
+// were never scored against the same neighbours.
+func TestTwoMetricsAreTwoVectorReports(t *testing.T) {
+	dir := t.TempDir()
+	for _, m := range []string{"euclidean", "cosine"} {
+		writeResult(t, dir, "vec-exact-sift-"+m+"-srv.json", bench.VectorResult{
+			Engine:  "exact",
+			Machine: bench.Machine{Host: "srv"},
+			Dataset: bench.DatasetStats{Name: "sift", Metric: m},
+		})
+	}
+
+	if err := run(dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []string{"euclidean", "cosine"} {
+		if _, err := os.Stat(filepath.Join(dir, "vector-report-sift-"+m+"-srv.md")); err != nil {
+			t.Errorf("the %s report was not written: %v", m, err)
 		}
 	}
 }

@@ -305,6 +305,67 @@ func MergeVector(build, query VectorResult) VectorResult {
 	return out
 }
 
+// VectorRun is what a report says about the run above its tables.
+//
+// It exists because two commands write that paragraph: the orchestrator at the
+// end of a run, and the command that rebuilds every report from the files on
+// disk afterwards. The second one has no command line to read, only results, so
+// the fields it cannot know are allowed to be empty rather than being invented.
+type VectorRun struct {
+	// Host is the machine the numbers were taken on.
+	Host string
+
+	// Dataset is the run as the engines read it.
+	Dataset DatasetStats
+
+	// From is the directory the dataset was read from, and is empty for a
+	// report rebuilt later, where the path is not in any result file and
+	// guessing at it would be worse than leaving it out.
+	From string
+
+	// Published says the ground truth for this metric came with the dataset
+	// rather than being computed here, which is what makes the exact scan's
+	// recall a check on the suite rather than a tautology.
+	Published bool
+
+	// BaseVectors is how many the dataset holds in full, so that a run given
+	// fewer can say so. Zero when the caller does not know.
+	BaseVectors int
+}
+
+// VectorHeader is the paragraph above a vector report.
+func VectorHeader(r VectorRun) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Vector results on %s\n\n", r.Host)
+
+	fmt.Fprintf(&b, "Dataset %s", r.Dataset.Name)
+	if r.From != "" {
+		fmt.Fprintf(&b, " from %s", r.From)
+	}
+	fmt.Fprintf(&b, ", ranked by %s, %d neighbours per query", MetricPhrase(r.Dataset.Metric), r.Dataset.K)
+	limited := r.BaseVectors > 0 && r.Dataset.Vectors > 0 && r.Dataset.Vectors < r.BaseVectors
+	if limited {
+		fmt.Fprintf(&b, ", limited to %s base vectors", count(r.Dataset.Vectors))
+	}
+	if r.Dataset.Queries > 0 {
+		fmt.Fprintf(&b, ", %s queries", count(r.Dataset.Queries))
+	}
+	b.WriteString(".\n\n")
+
+	if r.Published {
+		b.WriteString("The ground truth is the one published with the dataset, so the exact scan's recall is a real check on this suite: anything other than one means the files are being read wrongly and every figure below is wrong the same way.\n\n")
+	} else {
+		fmt.Fprintf(&b, "There is no published %s ground truth for this dataset, so it was computed here with a full exact scan and cached.\n", r.Dataset.Metric)
+		b.WriteString("The exact scan therefore scores one by construction and is not evidence of anything, unlike in a Euclidean run.\n\n")
+	}
+	if limited {
+		b.WriteString("The ground truth is the exact answer over the whole base set, and this run indexed only part of it.\n")
+		b.WriteString("Some true neighbours were therefore never indexed, so every recall figure below is a lower bound.\n")
+		b.WriteString("The engines are still comparable with each other because they were all given the same vectors, and they are not comparable with a run that used the whole set.\n\n")
+	}
+	return b.String()
+}
+
 // VectorReport renders a set of vector results as markdown.
 //
 // The recall thresholds are fixed here rather than chosen per run. Ninety
