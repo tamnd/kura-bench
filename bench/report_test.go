@@ -92,6 +92,33 @@ func TestTheCorpusIsDescribedByAnEngineThatIndexedIt(t *testing.T) {
 	}
 }
 
+// A runner that has a caveat writes it in both of its processes, and a report
+// that printed it twice would read like two separate warnings.
+func TestTheSameNoteFromBothPhasesIsSaidOnce(t *testing.T) {
+	note := "measured with its segment library held ahead of the release it names"
+	got := Merge(
+		Result{Engine: "bleve", Notes: note},
+		Result{Engine: "bleve", Notes: note},
+	)
+	if got.Notes != note {
+		t.Fatalf("the merged note is %q, want it said once", got.Notes)
+	}
+}
+
+// The second process can find out something the first could not, and that has to
+// survive the merge rather than being taken for a repeat.
+func TestANoteOnlyTheQueryPhaseCouldMakeSurvives(t *testing.T) {
+	got := Merge(
+		Result{Engine: "sqlitefts", Notes: "one segment"},
+		Result{Engine: "sqlitefts", Notes: "the update phase was left out"},
+	)
+	for _, want := range []string{"one segment", "the update phase was left out"} {
+		if !strings.Contains(got.Notes, want) {
+			t.Errorf("the merged note %q lost %q", got.Notes, want)
+		}
+	}
+}
+
 // indexedAndSearched is an engine that did everything it was asked.
 func indexedAndSearched(name string) Result {
 	return Result{

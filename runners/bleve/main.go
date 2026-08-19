@@ -132,6 +132,19 @@ func (e *engine) Search(ctx context.Context, query string, limit int) (int, erro
 	return int(res.Total), nil
 }
 
+// Note says which segment library produced these numbers.
+//
+// The version column says bleve, and bleve on its own is not what was measured
+// here. The release the version column names pulls in a zapx that cannot read
+// back the postings of a common term, so a report that named only bleve would
+// be pointing at a build that answers none of these queries.
+func (e *engine) Note() string {
+	return "measured with its segment library held at zapx " +
+		runner.ModuleVersion("github.com/blevesearch/zapx/v17") +
+		", which is newer than this release of bleve asks for, because the version it asks for" +
+		" cannot read back the postings of a term that appears in more than a thousand documents"
+}
+
 func (e *engine) Close() error {
 	if e.closed {
 		return nil

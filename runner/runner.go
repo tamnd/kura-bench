@@ -42,6 +42,28 @@ type Info struct {
 	Language string
 }
 
+// Noter is an engine with something to say about its own numbers.
+//
+// It is an optional interface rather than a field on Info because most engines
+// have nothing to add, and the ones that do are usually explaining something the
+// version column cannot say on its own.
+type Noter interface {
+	Note() string
+}
+
+// addNote puts another caveat after the ones already there.
+//
+// The separator is what makes this worth a function. A note is a sentence
+// without a full stop, so two of them joined by a space read as one sentence
+// that has lost its verb, and a reader who hits that stops reading the caveat
+// and starts wondering what is wrong with the report.
+func addNote(existing, note string) string {
+	if existing == "" {
+		return note
+	}
+	return existing + "; " + note
+}
+
 // Engine is one search engine under test.
 //
 // The lifecycle is Create, then AddBatch until the corpus is exhausted, then
@@ -144,6 +166,12 @@ func run(cfg Config, newEngine func(Config) (Engine, error)) error {
 		Language: info.Language,
 		Machine:  bench.Describe(),
 	}
+	// Said in both processes, because either one of them can be the one whose
+	// numbers end up in front of somebody. The two are merged into one sentence
+	// when the phases are put back together.
+	if n, ok := eng.(Noter); ok {
+		res.Notes = n.Note()
+	}
 
 	switch cfg.Phase {
 	case "index":
@@ -164,8 +192,8 @@ func run(cfg Config, newEngine func(Config) (Engine, error)) error {
 		// Reopening in the same process is not a cold start, and the result
 		// says so. A real one needs a second process, which is what the
 		// orchestrator does when it runs the two phases separately.
-		res.Notes = strings.TrimSpace(res.Notes +
-			" the open phase ran in the same process as the build, so it is warmer than a real cold start")
+		res.Notes = addNote(res.Notes,
+			"the open phase ran in the same process as the build, so it is warmer than a real cold start")
 		fresh, err := newEngine(cfg)
 		if err != nil {
 			return err
@@ -359,8 +387,8 @@ func updatePhase(cfg Config, eng Engine, res *bench.Result) *bench.UpdatePhase {
 	usage := bench.Measure(start)
 
 	if bad != nil {
-		res.Notes = strings.TrimSpace(res.Notes +
-			" the update phase was left out because this engine cannot reindex into an index it opened: " + bad.Error())
+		res.Notes = addNote(res.Notes,
+			"the update phase was left out because this engine cannot reindex into an index it opened: "+bad.Error())
 		return nil
 	}
 

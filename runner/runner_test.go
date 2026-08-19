@@ -60,6 +60,14 @@ func (f *fake) Search(ctx context.Context, query string, limit int) (int, error)
 
 func (f *fake) Close() error { f.closed++; return nil }
 
+// talkative is an engine with a caveat, which is the case the [Noter] interface
+// exists for.
+type talkative struct{ fake }
+
+func (t *talkative) Note() string {
+	return "built against something other than the version it reports"
+}
+
 func TestTheIndexPhaseFeedsEveryDocumentOnceAndFlushesLast(t *testing.T) {
 	cfg, _ := fixture(t, 1201)
 	cfg.Phase = "index"
@@ -169,6 +177,22 @@ func TestAnUnknownPhaseIsRefused(t *testing.T) {
 
 	if err := run(cfg, func(Config) (Engine, error) { return &fake{}, nil }); err == nil {
 		t.Fatal("an unknown phase was accepted")
+	}
+}
+
+// An engine whose numbers need a sentence next to them has to get that sentence
+// into both phases, because the orchestrator runs them as separate processes and
+// either one can be the one that ends up in a report on its own.
+func TestAnEngineThatHasSomethingToSayIsHeardInBothPhases(t *testing.T) {
+	for _, phase := range []string{"index", "query"} {
+		cfg, _ := fixture(t, 20)
+		cfg.Phase = phase
+		cfg.Repeat = 1
+
+		out := capture(t, cfg, &talkative{})
+		if !strings.Contains(out.Notes, "built against something other than the version it reports") {
+			t.Errorf("the %s phase dropped the engine's note, notes were %q", phase, out.Notes)
+		}
 	}
 }
 

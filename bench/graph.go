@@ -238,28 +238,6 @@ func MergeGraph(build, query GraphResult) GraphResult {
 	return out
 }
 
-// joinNotes puts the two processes' notes together.
-//
-// Usually they are the same sentence, written by the same runner twice. When
-// they are not, it is because the query process found out something the build
-// process could not know yet, and what it says then starts with what it said
-// before and goes on. So the longer of the two wins when one contains the
-// other, and only genuinely different notes are joined, with something between
-// them that keeps two sentences apart on the page.
-func joinNotes(build, query string) string {
-	switch {
-	case query == "":
-		return build
-	case build == "":
-		return query
-	case strings.Contains(query, build):
-		return query
-	case strings.Contains(build, query):
-		return build
-	}
-	return strings.TrimSpace(build + "; " + query)
-}
-
 // GraphPlan is how much of each operation a run asked for, as far as a report
 // has to say it.
 //

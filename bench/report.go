@@ -20,10 +20,32 @@ func Merge(index, query Result) Result {
 	out.Open = query.Open
 	out.Search = query.Search
 	out.Update = query.Update
-	if query.Notes != "" {
-		out.Notes = strings.TrimSpace(out.Notes + " " + query.Notes)
-	}
+	out.Notes = joinNotes(index.Notes, query.Notes)
 	return out
+}
+
+// joinNotes puts the two processes' notes together, for whichever suite is
+// merging them.
+//
+// Usually they are the same sentence, written by the same runner twice, because
+// a runner that has something to say about its numbers says it in both of its
+// processes. When they are not the same, it is because the second process found
+// out something the first could not know yet, and what it says then starts with
+// what it said before and goes on. So the longer of the two wins when one
+// contains the other, and only genuinely different notes are joined, with
+// something between them that keeps two sentences apart on the page.
+func joinNotes(first, second string) string {
+	switch {
+	case second == "":
+		return first
+	case first == "":
+		return second
+	case strings.Contains(second, first):
+		return second
+	case strings.Contains(first, second):
+		return first
+	}
+	return strings.TrimSpace(first + "; " + second)
 }
 
 // Report renders a set of results as markdown.
