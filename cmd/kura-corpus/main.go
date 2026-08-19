@@ -14,6 +14,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -57,10 +58,10 @@ func (r *repoList) Set(v string) error {
 
 func run(root string, repos repoList, out string) error {
 	if root == "" && len(repos) == 0 {
-		return fmt.Errorf("one of -root or -repo is required")
+		return errors.New("one of -root or -repo is required")
 	}
 	if root != "" && len(repos) > 0 {
-		return fmt.Errorf("give either -root or -repo, not both, so that what went into the corpus is unambiguous")
+		return errors.New("give either -root or -repo, not both, so that what went into the corpus is unambiguous")
 	}
 
 	f, err := os.Create(out)

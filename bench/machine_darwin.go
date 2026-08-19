@@ -3,6 +3,7 @@
 package bench
 
 import (
+	"context"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -36,7 +37,7 @@ func loadAverage() float64 {
 // exported on every version of the standard library, which is more special
 // cases than a field used to label a results table is worth.
 func sysctl(name string) string {
-	out, err := exec.Command("sysctl", "-n", name).Output()
+	out, err := exec.CommandContext(context.Background(), "sysctl", "-n", name).Output()
 	if err != nil {
 		return ""
 	}

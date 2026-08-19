@@ -30,5 +30,7 @@ func peakRSS() int64 {
 	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &ru); err != nil {
 		return 0
 	}
-	return int64(ru.Maxrss) * maxrssUnit
+	// The conversion is not redundant everywhere. Maxrss is int64 on the
+	// 64 bit targets and int32 on the 32 bit ones.
+	return int64(ru.Maxrss) * maxrssUnit //nolint:unconvert // the width of Maxrss is platform specific
 }

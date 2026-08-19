@@ -11,6 +11,7 @@ import (
 	"context"
 
 	"github.com/blevesearch/bleve/v2"
+	"github.com/blevesearch/bleve/v2/analysis/analyzer/simple"
 	"github.com/blevesearch/bleve/v2/mapping"
 	bquery "github.com/blevesearch/bleve/v2/search/query"
 
@@ -86,12 +87,26 @@ func (e *engine) Flush() error {
 }
 
 func (e *engine) Search(ctx context.Context, query string, limit int) (int, error) {
+	// Title and body, named. The composite _all field is off in the mapping,
+	// and a match query with no field goes to _all, so an unnamed query here
+	// searches a field that was never written and returns nothing at all.
+	//
 	// A match query with OR is the same reading of a bare query that the other
 	// engines here are given: every word counts towards the score and none of
 	// them is required. Making it AND would change what "hits" means and the
 	// counts would stop being comparable.
-	q := bleve.NewMatchQuery(query)
-	q.SetOperator(bquery.MatchQueryOperatorOr)
+	names := []string{"title", "body"}
+	fields := make([]bquery.Query, 0, len(names))
+	for _, f := range names {
+		q := bleve.NewMatchQuery(query)
+		q.SetOperator(bquery.MatchQueryOperatorOr)
+		q.SetField(f)
+		fields = append(fields, q)
+	}
+	// A document matching in both fields is one hit, which is what the other
+	// engines count. Bleve's disjunction deduplicates by document, so this is
+	// the same set that a query parser over two fields produces elsewhere.
+	q := bleve.NewDisjunctionQuery(fields...)
 
 	req := bleve.NewSearchRequestOptions(q, limit, 0, false)
 	req.Fields = []string{"title", "path"}
@@ -157,7 +172,11 @@ func indexMapping() mapping.IndexMapping {
 
 	m := bleve.NewIndexMapping()
 	m.DefaultMapping = d
-	m.DefaultAnalyzer = "standard"
+	// Simple, not standard. Bleve's standard analyzer removes English stopwords
+	// and none of the other engines here is asked to. One of the queries is the
+	// single word "the", on purpose, and an engine that threw it away would
+	// report no hits for it and a latency for having done no work.
+	m.DefaultAnalyzer = simple.Name
 	m.StoreDynamic = false
 	m.IndexDynamic = false
 	return m

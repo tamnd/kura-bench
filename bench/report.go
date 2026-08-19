@@ -3,6 +3,7 @@ package bench
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -293,7 +294,7 @@ func ms(v float64) string {
 // count groups thousands, because a six figure document count is unreadable
 // without it and every table here has one.
 func count(n int) string {
-	s := fmt.Sprintf("%d", n)
+	s := strconv.Itoa(n)
 	if len(s) <= 3 {
 		return s
 	}
