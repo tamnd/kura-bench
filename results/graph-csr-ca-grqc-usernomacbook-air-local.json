@@ -1,0 +1,137 @@
+{
+  "engine": "csr",
+  "version": "0.1.0",
+  "language": "rust",
+  "dataset": {
+    "name": "ca-grqc",
+    "nodes": 5242,
+    "edges": 28980,
+    "undirected": true,
+    "seeds": 1000
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 0.001783083,
+      "user_seconds": 0.001022,
+      "sys_seconds": 0.0002859999999999998,
+      "peak_rss_bytes": 3063808,
+      "rss_bytes": 3063808,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "bytes": 178856,
+    "files": 1
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.000188125,
+      "user_seconds": 0.000018000000000000004,
+      "sys_seconds": 0.00008099999999999991,
+      "peak_rss_bytes": 2473984,
+      "rss_bytes": 2473984,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 2473984
+  },
+  "query": {
+    "usage": {
+      "wall_seconds": 0.004532917,
+      "user_seconds": 0.006992999999999999,
+      "sys_seconds": 0.0014030000000000002,
+      "peak_rss_bytes": 4554752,
+      "rss_bytes": 4554752,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "ops": [
+      {
+        "op": "neighbours",
+        "runs": 1000,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p90_ms": 0.000042,
+        "p99_ms": 0.000042,
+        "max_ms": 0.000125,
+        "concurrent": {
+          "workers": 10,
+          "queries": 1000,
+          "seconds": 0.000189459,
+          "median_ms": 0.000041,
+          "p99_ms": 0.000084
+        }
+      },
+      {
+        "op": "two-hop",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.000041,
+        "median_ms": 0.000125,
+        "p90_ms": 0.000542,
+        "p99_ms": 0.001542,
+        "max_ms": 0.001917,
+        "concurrent": {
+          "workers": 10,
+          "queries": 100,
+          "seconds": 0.000085709,
+          "median_ms": 0.000125,
+          "p99_ms": 0.002
+        }
+      },
+      {
+        "op": "shortest-path",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.000083,
+        "median_ms": 0.014667,
+        "p90_ms": 0.064125,
+        "p99_ms": 0.068083,
+        "max_ms": 0.06883299999999999,
+        "concurrent": {
+          "workers": 10,
+          "queries": 100,
+          "seconds": 0.000542667,
+          "median_ms": 0.020084,
+          "p99_ms": 0.13549999999999998
+        }
+      },
+      {
+        "op": "bfs",
+        "runs": 10,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.06375,
+        "median_ms": 0.066,
+        "p90_ms": 0.06837499999999999,
+        "p99_ms": 0.06929099999999999,
+        "max_ms": 0.06929099999999999
+      },
+      {
+        "op": "pagerank",
+        "runs": 1,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.6203339999999999,
+        "median_ms": 0.6203339999999999,
+        "p90_ms": 0.6203339999999999,
+        "p99_ms": 0.6203339999999999,
+        "max_ms": 0.6203339999999999
+      }
+    ]
+  },
+  "machine": {
+    "host": "USERnoMacBook-Air.local",
+    "os": "macos",
+    "arch": "aarch64",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memory_bytes": 25769803776,
+    "load_before": 18.76,
+    "memory_free_bytes": 0,
+    "dedicated": false
+  }
+}

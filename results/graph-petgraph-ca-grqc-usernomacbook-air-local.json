@@ -1,0 +1,138 @@
+{
+  "engine": "petgraph",
+  "version": "0.8.3",
+  "language": "rust",
+  "dataset": {
+    "name": "ca-grqc",
+    "nodes": 5242,
+    "edges": 28980,
+    "undirected": true,
+    "seeds": 1000
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 0.001423708,
+      "user_seconds": 0.001072,
+      "sys_seconds": 0.0003519999999999999,
+      "peak_rss_bytes": 2998272,
+      "rss_bytes": 2998272,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "bytes": 231856,
+    "files": 1
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.001158084,
+      "user_seconds": 0.001014,
+      "sys_seconds": 0.00014400000000000003,
+      "peak_rss_bytes": 3145728,
+      "rss_bytes": 3145728,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 3145728
+  },
+  "query": {
+    "usage": {
+      "wall_seconds": 0.008817458,
+      "user_seconds": 0.013340000000000001,
+      "sys_seconds": 0.0017850000000000001,
+      "peak_rss_bytes": 5275648,
+      "rss_bytes": 5275648,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "ops": [
+      {
+        "op": "neighbours",
+        "runs": 1000,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0,
+        "median_ms": 0.000042,
+        "p90_ms": 0.000083,
+        "p99_ms": 0.000125,
+        "max_ms": 0.00020800000000000001,
+        "concurrent": {
+          "workers": 10,
+          "queries": 1000,
+          "seconds": 0.000297584,
+          "median_ms": 0.000042,
+          "p99_ms": 0.000334
+        }
+      },
+      {
+        "op": "two-hop",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.000041,
+        "median_ms": 0.00025,
+        "p90_ms": 0.0011250000000000001,
+        "p99_ms": 0.0036669999999999997,
+        "max_ms": 0.004583,
+        "concurrent": {
+          "workers": 10,
+          "queries": 100,
+          "seconds": 0.000154792,
+          "median_ms": 0.00020800000000000001,
+          "p99_ms": 0.032208
+        }
+      },
+      {
+        "op": "shortest-path",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0,
+        "median_ms": 0.028915999999999997,
+        "p90_ms": 0.123583,
+        "p99_ms": 0.12875,
+        "max_ms": 0.131667,
+        "concurrent": {
+          "workers": 10,
+          "queries": 100,
+          "seconds": 0.000868292,
+          "median_ms": 0.0375,
+          "p99_ms": 0.1795
+        }
+      },
+      {
+        "op": "bfs",
+        "runs": 10,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.119584,
+        "median_ms": 0.122583,
+        "p90_ms": 0.125667,
+        "p99_ms": 0.126417,
+        "max_ms": 0.126417
+      },
+      {
+        "op": "pagerank",
+        "runs": 1,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 1.638209,
+        "median_ms": 1.638209,
+        "p90_ms": 1.638209,
+        "p99_ms": 1.638209,
+        "max_ms": 1.638209
+      }
+    ]
+  },
+  "machine": {
+    "host": "USERnoMacBook-Air.local",
+    "os": "macos",
+    "arch": "aarch64",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memory_bytes": 25769803776,
+    "load_before": 18.76,
+    "memory_free_bytes": 0,
+    "dedicated": false
+  },
+  "notes": "petgraph is an in memory library with no on disk form, so the build phase writes the edges back out and the cold start is the graph being constructed again, so its open figure is a rebuild rather than a file being mapped"
+}
