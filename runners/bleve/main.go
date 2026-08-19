@@ -5,6 +5,20 @@
 // index to disk, which makes it a fair comparison for on disk size and for cold
 // start, and an unfair one for an engine that keeps everything in memory. Both
 // numbers are reported and neither is adjusted.
+//
+// The segment library is pinned above what bleve v2.6.0 requires, and that pin
+// is what makes this engine measurable at all. Bleve writes its postings in
+// chunks, and up to zapx v17.1.3 the chunk lengths were converted to offsets in
+// the same slice they were then written back into, so any chunk a term does not
+// appear in was left holding an offset where a length belonged. Everything
+// after that chunk was then read from the wrong place, which surfaces as a
+// bogus frequency, an overflow reading a norm, a panic off the end of the
+// chunk, or a request to allocate a hundred terabytes for a location list.
+// Only a term whose postings span more than one chunk can hit it, which under
+// the default chunking means a term in more than 1024 documents, and only if it
+// also skips a chunk entirely. That is why the corpus's commonest words failed
+// and its rare ones did not. zapx v17.1.4 fixed it, and the pin can go when a
+// bleve release requires that or later.
 package main
 
 import (

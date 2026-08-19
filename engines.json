@@ -14,7 +14,8 @@
       "language": "go",
       "registry": "gomod",
       "package": "github.com/blevesearch/bleve/v2",
-      "source": "https://github.com/blevesearch/bleve"
+      "source": "https://github.com/blevesearch/bleve",
+      "note": "Its segment library, zapx, is held above the version this release of bleve asks for. The one it asks for cannot read back the postings of a term that appears in more than a thousand documents, so the engine indexes the corpus and then answers nothing."
     },
     {
       "name": "sqlitefts",
