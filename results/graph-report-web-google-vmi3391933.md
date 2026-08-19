@@ -23,7 +23,7 @@ The edge list is 38.9 MB as pairs of uint32, which is what the store sizes below
 | csr | 0.1.0 | agrees | agrees | agrees | agrees | agrees |
 | ladybug | 0.19.1 | agrees | agrees | agrees | 20.0% agree | cannot |
 | petgraph | 0.8.3 | agrees | agrees | agrees | agrees | agrees |
-| sqlite | v1.56.0 | ran out of time | ran out of time | ran out of time | ran out of time | ran out of time |
+| sqlite | v1.57.0 | ran out of time | ran out of time | ran out of time | ran out of time | ran out of time |
 
 The answers were worked out separately, in Go, by walking the same edge list the plainest way there is.
 Agreement between that and an engine is two independent implementations landing on the same numbers, which is the only reason the timings below are worth reading.
@@ -35,7 +35,7 @@ Agreement between that and an engine is two independent implementations landing 
 | csr | 6.1 s | 839,894 | 5.3 | 0.9x | 112.7 MB |
 | ladybug | 13.8 s | 369,605 | 25.0 | 1.8x | 655.7 MB |
 | petgraph | 6.7 s | 762,780 | 6.2 | 0.9x | 165.3 MB |
-| sqlite | 2m29s | 34,186 | 72.0 | 0.5x | 574.6 MB |
+| sqlite | 1m53s | 45,106 | 68.3 | 0.6x | 574.8 MB |
 
 This is the cost of getting a graph into the store in the first place, which on a large one is the largest number in this report.
 

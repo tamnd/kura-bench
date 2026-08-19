@@ -23,7 +23,7 @@ The edge list is 226 KB as pairs of uint32, which is what the store sizes below 
 | csr | 0.1.0 | agrees | agrees | agrees | agrees | agrees |
 | ladybug | 0.19.1 | agrees | agrees | agrees | agrees | cannot |
 | petgraph | 0.8.3 | agrees | agrees | agrees | agrees | agrees |
-| sqlite | v1.56.0 | agrees | agrees | agrees | agrees | agrees |
+| sqlite | v1.57.0 | agrees | agrees | agrees | agrees | agrees |
 
 The answers were worked out separately, in Go, by walking the same edge list the plainest way there is.
 Agreement between that and an engine is two independent implementations landing on the same numbers, which is the only reason the timings below are worth reading.
@@ -35,7 +35,7 @@ Agreement between that and an engine is two independent implementations landing 
 | csr | 6 ms | 4,525,936 | 0.0 | 1.0x | 6.0 MB |
 | ladybug | 1.0 s | 27,952 | 0.9 | 0.9x | 79.3 MB |
 | petgraph | 6 ms | 4,571,577 | 0.0 | 0.9x | 6.2 MB |
-| sqlite | 405 ms | 71,520 | 0.3 | 0.8x | 15.1 MB |
+| sqlite | 367 ms | 79,043 | 0.2 | 0.6x | 15.2 MB |
 
 This is the cost of getting a graph into the store in the first place, which on a large one is the largest number in this report.
 
@@ -58,7 +58,7 @@ Above one is the cost of an index, a property store or a page layout, and it sho
 | csr | 1 ms | 0.00 | 2.7 MB |
 | ladybug | 192 ms | 0.19 | 53.1 MB |
 | petgraph | 5 ms | 0.00 | 3.3 MB |
-| sqlite | 3 ms | 0.00 | 8.9 MB |
+| sqlite | 80 ms | 0.07 | 9.0 MB |
 
 This is a separate process from the one that built the index, so it is a real restart and not a reopen of a warm handle.
 
@@ -73,7 +73,7 @@ One hop out of one node, the cheapest thing a graph store does and the one it do
 | csr | 1,000 | 90 ns | 110 ns | 390 ns | 821 ns | 278,501 | 6 in flight |
 | ladybug | 1,000 | 6.05 ms | 16.03 ms | 64.61 ms | 146.18 ms | 142 | 6 in flight |
 | petgraph | 1,000 | 150 ns | 360 ns | 631 ns | 1.0 us | 61,463 | 6 in flight |
-| sqlite | 1,000 | 33.9 us | 62.5 us | 256.6 us | 6.13 ms | 13,732 | 6 in flight |
+| sqlite | 1,000 | 40.6 us | 136.9 us | 6.55 ms | 65.82 ms | 19,746 | 6 in flight |
 
 ### two-hop
 
@@ -84,7 +84,7 @@ The distinct nodes within two hops, which is a friend of a friend, and the opera
 | csr | 100 | 942 ns | 3.9 us | 82.2 us | 625.6 us | 32,264 | 6 in flight |
 | ladybug | 100 | 9.80 ms | 17.61 ms | 58.36 ms | 85.55 ms | 111 | 6 in flight |
 | petgraph | 100 | 1.4 us | 5.9 us | 23.6 us | 25.2 us | 17,330 | 6 in flight |
-| sqlite | 100 | 147.7 us | 1.05 ms | 6.92 ms | 7.71 ms | 1,748 | 6 in flight |
+| sqlite | 100 | 141.7 us | 581.3 us | 1.80 ms | 3.47 ms | 1,605 | 6 in flight |
 
 ### shortest-path
 
@@ -95,7 +95,7 @@ The hop count between two nodes, or nothing when they are not connected, which c
 | csr | 100 | 37.6 us | 150.5 us | 249.6 us | 2.98 ms | 3,223 | 6 in flight |
 | ladybug | 100 | 19.29 ms | 47.74 ms | 89.22 ms | 100.91 ms | 122 | 6 in flight |
 | petgraph | 100 | 59.5 us | 343.1 us | 3.75 ms | 5.10 ms | 9,240 | 6 in flight |
-| sqlite | 100 | 29.40 ms | 213.37 ms | 345.82 ms | 435.67 ms | 14 | 6 in flight |
+| sqlite | 100 | 35.62 ms | 278.64 ms | 614.68 ms | 681.01 ms | 14 | 6 in flight |
 
 ### bfs
 
@@ -106,7 +106,7 @@ The whole reachable set from one node, which touches everything and cannot be he
 | csr | 10 | 142.2 us | 231.1 us | 293.8 us | 293.8 us | 7,034 | one at a time |
 | ladybug | 10 | 51.02 ms | 86.07 ms | 196.08 ms | 196.08 ms | 19 | one at a time |
 | petgraph | 10 | 189.9 us | 1.61 ms | 1.81 ms | 1.81 ms | 5,267 | one at a time |
-| sqlite | 10 | 246.79 ms | 416.52 ms | 450.05 ms | 450.05 ms | 4 | one at a time |
+| sqlite | 10 | 306.43 ms | 433.55 ms | 555.64 ms | 555.64 ms | 3 | one at a time |
 
 ### pagerank
 
@@ -117,7 +117,7 @@ The whole graph, several times over, which is the analytics workload rather than
 | csr | 1 | 2.46 ms | 2.46 ms | 2.46 ms | 2.46 ms | 406 | one at a time |
 | ladybug | | | | | | | its PageRank lives in an extension that is downloaded at first use, and a benchmark that reaches the network mid run is measuring the network |
 | petgraph | 1 | 14.19 ms | 14.19 ms | 14.19 ms | 14.19 ms | 70 | one at a time |
-| sqlite | 1 | 876.14 ms | 876.14 ms | 876.14 ms | 876.14 ms | 1 | one at a time |
+| sqlite | 1 | 1.41 s | 1.41 s | 1.41 s | 1.41 s | 0 | one at a time |
 
 The maximum matters more here than in the other suites.
 Most nodes in a real graph have a handful of neighbours and a few have a hundred thousand, so the median says what the common case costs and the maximum says what a hub costs.

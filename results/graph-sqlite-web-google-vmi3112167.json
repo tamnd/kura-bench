@@ -1,6 +1,6 @@
 {
   "engine": "sqlite",
-  "version": "v1.56.0",
+  "version": "v1.57.0",
   "language": "go",
   "dataset": {
     "name": "web-google",
@@ -11,12 +11,12 @@
   },
   "build": {
     "usage": {
-      "wall_seconds": 73.044373321,
-      "user_seconds": 50.283683,
-      "sys_seconds": 12.870149,
-      "peak_rss_bytes": 602210304,
-      "rss_bytes": 439386112,
-      "read_bytes": 4096,
+      "wall_seconds": 78.860924429,
+      "user_seconds": 54.295344,
+      "sys_seconds": 15.697854,
+      "peak_rss_bytes": 602386432,
+      "rss_bytes": 439570432,
+      "read_bytes": 0,
       "write_bytes": 339578880
     },
     "bytes": 169340928,
@@ -53,8 +53,8 @@
     "cpu": "AMD EPYC Processor (with IBPB)",
     "cores": 6,
     "memory_bytes": 12541493248,
-    "load_before": 8,
-    "memory_free_bytes": 7480717312,
+    "load_before": 10.91,
+    "memory_free_bytes": 7413874688,
     "dedicated": false
   },
   "notes": "the edges live in one table with a covering index on both columns, and the traversals walk it a level at a time from Go, which is how a relational store is used as a graph in practice",
