@@ -48,10 +48,17 @@ A run on a machine that was already busy is marked as not dedicated, and the rep
 | bleve | Go | The scorch index, the usual answer for full text search inside a Go binary |
 | sqlitefts | Go | SQLite FTS5 through a pure Go driver, the thing most projects reach for first |
 | tantivy | Rust | A fast Lucene style index, the number worth being measured against |
+| seekstorm | Rust | A newer memory mapped index making strong latency claims, worth checking |
 | genba | Go | Our own index, the reason the rest of this exists |
 
 Each engine is a separate binary that speaks a small contract: create, add a batch, flush, open, search, close.
 Adding one is a hundred lines and does not touch the harness.
+The Go runners live under `runners/`, one directory each, and the Rust runners share a cargo workspace at `runners/rust` so that the same measuring code times all of them.
+
+Every engine is pinned to a version and `kura-versions` compares each pin against its registry.
+A workflow runs it every Monday and opens an issue when something has fallen behind, because a benchmark against a two year old release is a benchmark against nothing.
+
+	go run ./cmd/kura-versions
 
 ## How a run works
 

@@ -73,8 +73,8 @@ jobs:
           CGO_ENABLED: "0"
         run: go build ./...
 
-  # The Rust runner is a separate crate with its own toolchain, and it has the
-  # same platform specific counter code that the Go side does.
+  # The Rust runners live in one cargo workspace with their own toolchain, and
+  # they share the platform specific counter code that the Go side also has.
   rust:
     strategy:
       fail-fast: false
@@ -83,7 +83,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: runners/tantivy
+        working-directory: runners/rust
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -91,11 +91,11 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: runners/tantivy
+          workspaces: runners/rust
       - name: cargo fmt
         run: cargo fmt --check
       - name: cargo clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
       - name: cargo build
         run: cargo build --release
       - name: cargo test
@@ -120,7 +120,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: runners/tantivy
+          workspaces: runners/rust
       - name: build everything
         run: make build
       - name: build a corpus from this checkout

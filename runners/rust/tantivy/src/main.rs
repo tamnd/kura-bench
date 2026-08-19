@@ -6,29 +6,21 @@
 //! timing are the ones the shared Go harness uses, because a benchmark where
 //! each subject brings its own stopwatch measures the stopwatches.
 
-mod corpus;
-mod machine;
-mod result;
-mod usage;
-
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
+
+use benchrs::config::Config;
+use benchrs::{SEARCH_LIMIT, UPDATE_DOCUMENTS, config, corpus, machine, result, usage};
 
 use tantivy::collector::{Count, TopDocs};
 use tantivy::query::QueryParser;
 use tantivy::schema::{Field, STORED, STRING, Schema, TEXT};
 use tantivy::{Index, IndexWriter, TantivyDocument};
 
-/// How many documents the update phase rewrites. It is the same number the Go
-/// runners use, on purpose.
-///
-/// There is no equivalent constant for the indexing phase. The Go engines are
-/// handed documents in batches because that is how their write calls are
-/// shaped, while Tantivy takes one document at a time and buffers until its
-/// heap budget is spent. Inventing a batch boundary here would add a cost the
-/// engine does not otherwise pay.
-const UPDATE_DOCUMENTS: usize = 5000;
+// There is no batch size constant here. The Go engines are handed documents in
+// batches because that is how their write calls are shaped, while Tantivy takes
+// one document at a time and buffers until its heap budget is spent. Inventing
+// a batch boundary would add a cost the engine does not otherwise pay.
 
 /// The writer's memory budget. Tantivy spends this before it flushes a segment,
 /// so it is the single setting that most changes the shape of the index. Two
@@ -44,18 +36,8 @@ fn main() {
     }
 }
 
-struct Config {
-    corpus: PathBuf,
-    queries: PathBuf,
-    work: PathBuf,
-    phase: String,
-    repeat: usize,
-    limit: usize,
-    workers: usize,
-}
-
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = parse_args()?;
+    let cfg = config::from_env()?;
     let mut res = result::Result {
         engine: "tantivy".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
@@ -193,7 +175,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     let reader = index.reader()?;
     let parser = QueryParser::for_index(&index, vec![fields.title, fields.body]);
     let searcher = reader.searcher();
-    search_once(&searcher, &parser, &queries[0], 10)?;
+    search_once(&searcher, &parser, &queries[0], SEARCH_LIMIT)?;
     let open = usage::measure(&open_start);
     res.open = result::OpenPhase {
         resident_bytes: open.rss_bytes,
@@ -206,11 +188,11 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         // One warm up that is not counted, because the first run of a query
         // pays for whatever the engine caches per term and no deployment sees
         // that cost on every request.
-        let mut hits = search_once(&searcher, &parser, q, 10)?;
+        let mut hits = search_once(&searcher, &parser, q, SEARCH_LIMIT)?;
         let mut runs = Vec::with_capacity(cfg.repeat);
         for _ in 0..cfg.repeat {
             let t = Instant::now();
-            hits = search_once(&searcher, &parser, q, 10)?;
+            hits = search_once(&searcher, &parser, q, SEARCH_LIMIT)?;
             runs.push(t.elapsed().as_secs_f64() * 1000.0);
         }
         stats.push(result::summarise(q, hits, runs));
@@ -254,7 +236,12 @@ fn search_once(
     // explicitly so that a change in its default does not silently change what
     // is being compared.
     let (parsed, _errors) = parser.parse_query_lenient(query);
-    let (count, top) = searcher.search(&parsed, &(Count, TopDocs::with_limit(limit)))?;
+    // From 0.26 the ordering is chosen explicitly. Score order is what a search
+    // result list is, and it is what the other engines here are asked for.
+    let (count, top) = searcher.search(
+        &parsed,
+        &(Count, TopDocs::with_limit(limit).order_by_score()),
+    )?;
     for (_score, address) in top {
         let _doc: TantivyDocument = searcher.doc(address)?;
     }
@@ -302,7 +289,7 @@ fn concurrent_phase(
                 let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 let Some(q) = jobs.get(i) else { break };
                 let t = Instant::now();
-                if search_once(&searcher, &parser, q, 10).is_err() {
+                if search_once(&searcher, &parser, q, SEARCH_LIMIT).is_err() {
                     return None;
                 }
                 times.push(t.elapsed().as_secs_f64() * 1000.0);
@@ -341,10 +328,7 @@ fn update_phase(
     index: &Index,
     fields: &Fields,
 ) -> Result<Option<result::UpdatePhase>, Box<dyn std::error::Error>> {
-    let mut want = UPDATE_DOCUMENTS;
-    if cfg.limit > 0 && cfg.limit < want {
-        want = cfg.limit;
-    }
+    let want = cfg.capped(UPDATE_DOCUMENTS);
 
     let mut writer: IndexWriter = index.writer(WRITER_HEAP)?;
     let mut documents = 0usize;
@@ -382,44 +366,4 @@ fn update_phase(
         bytes,
         index_bytes_after: size,
     }))
-}
-
-fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
-    let mut cfg = Config {
-        corpus: PathBuf::new(),
-        queries: PathBuf::new(),
-        work: PathBuf::new(),
-        phase: "all".to_string(),
-        repeat: 20,
-        limit: 0,
-        workers: 0,
-    };
-
-    // The flags are parsed by hand because they are the Go harness's flags, and
-    // matching them exactly matters more than the convenience of a crate that
-    // would spell them differently.
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut i = 0;
-    while i < args.len() {
-        let name = args[i].trim_start_matches('-');
-        let value = args.get(i + 1).cloned().unwrap_or_default();
-        match name {
-            "corpus" => cfg.corpus = PathBuf::from(&value),
-            "queries" => cfg.queries = PathBuf::from(&value),
-            "work" => cfg.work = PathBuf::from(&value),
-            "phase" => cfg.phase = value.clone(),
-            "repeat" => cfg.repeat = value.parse()?,
-            "limit" => cfg.limit = value.parse()?,
-            "workers" => cfg.workers = value.parse()?,
-            other => return Err(format!("unknown flag {other}").into()),
-        }
-        i += 2;
-    }
-    if cfg.corpus.as_os_str().is_empty() || cfg.work.as_os_str().is_empty() {
-        return Err("both -corpus and -work are required".into());
-    }
-    if cfg.phase != "index" && cfg.queries.as_os_str().is_empty() {
-        return Err("-queries is required for the query phase".into());
-    }
-    Ok(cfg)
 }

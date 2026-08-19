@@ -163,7 +163,7 @@ func open(dir string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(context.Background()); err != nil {
 		return nil, err
 	}
 	return db, nil

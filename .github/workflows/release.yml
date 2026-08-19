@@ -86,11 +86,12 @@ jobs:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           SCOOP_BUCKET_GITHUB_TOKEN: ${{ secrets.SCOOP_BUCKET_GITHUB_TOKEN }}
 
-  # The Rust runner is not in the release archives because it has to be built
-  # for the target, so it is built here for the three platforms a benchmark run
-  # happens on and attached to the release. Somebody measuring Tantivy on a
-  # machine without a Rust toolchain can take the binary from the release page.
-  tantivy:
+  # The Rust runners are not in the release archives because they have to be
+  # built for the target, so they are built here for the three platforms a
+  # benchmark run happens on and attached to the release. Somebody measuring
+  # Tantivy or SeekStorm on a machine without a Rust toolchain can take the
+  # binary from the release page.
+  rust-runners:
     if: github.ref_type == 'tag'
     strategy:
       fail-fast: false
@@ -107,16 +108,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: runners/tantivy
+          workspaces: runners/rust
       - name: build
-        working-directory: runners/tantivy
+        working-directory: runners/rust
         run: cargo build --release
-      - name: name it after the platform
+      - name: name them after the platform
         shell: bash
         run: |
           mkdir -p out
-          cp runners/tantivy/target/release/tantivy-runner${{ matrix.ext }} \
-            out/tantivy-runner_${{ github.ref_name }}_${{ matrix.name }}${{ matrix.ext }}
+          for r in tantivy seekstorm; do
+            cp "runners/rust/target/release/$r-runner${{ matrix.ext }}" \
+              "out/$r-runner_${{ github.ref_name }}_${{ matrix.name }}${{ matrix.ext }}"
+          done
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*

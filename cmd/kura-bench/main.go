@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -118,7 +119,7 @@ func run(cfg config) error {
 		fmt.Fprintf(os.Stderr, "wrote %s\n", name)
 	}
 	if len(results) == 0 {
-		return fmt.Errorf("every engine failed")
+		return errors.New("every engine failed")
 	}
 
 	report := filepath.Join(cfg.out, "report-"+hostSlug(results[0].Machine.Host)+".md")
@@ -187,11 +188,23 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
 	}
 	fmt.Fprintf(os.Stderr, "%s %s took %s\n", r.name, phase, time.Since(start).Round(time.Second))
 
+	// The result is the last line of stdout, not all of it. Some engines log
+	// while they index and there is no flag to stop them, and losing a whole
+	// engine because a library printed a line would be a silly reason for a
+	// blank row.
 	var res bench.Result
-	if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &res); err != nil {
+	if err := json.Unmarshal(lastLine(stdout.Bytes()), &res); err != nil {
 		return bench.Result{}, fmt.Errorf("the runner did not write a result: %w", err)
 	}
 	return res, nil
+}
+
+func lastLine(b []byte) []byte {
+	b = bytes.TrimRight(b, "\r\n \t")
+	if i := bytes.LastIndexByte(b, '\n'); i >= 0 {
+		b = b[i+1:]
+	}
+	return bytes.TrimSpace(b)
 }
 
 type runnerBin struct {

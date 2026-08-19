@@ -10,7 +10,7 @@
 # Results are committed on purpose, so results/ is deliberately not ignored.
 
 # Rust build output.
-/runners/tantivy/target/
+/runners/rust/target/
 
 # Editors and platform noise.
 .DS_Store
