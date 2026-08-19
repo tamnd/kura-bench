@@ -124,6 +124,23 @@ func (e *engine) Search(ctx context.Context, query string, limit int) (int, erro
 	return res.Total, nil
 }
 
+// Note says that this engine is not reading the query the way the rest of the
+// table is.
+//
+// Every other engine here is asked for an OR over the words as they were
+// written, so the hit counts can be put side by side. Genba drops stopwords
+// from a query before it runs one, which is the right thing for somebody typing
+// a question and the wrong thing for a column that is meant to be comparable:
+// on "deprecated in favour of" it searches two words where the others search
+// four, matches a fiftieth as many documents, and is quick about it because it
+// did less. Rewriting the query in this runner to put the words back would
+// measure something nobody can deploy, so the numbers stay as they are and the
+// report says why they are lower.
+func (e *engine) Note() string {
+	return "it drops stopwords from a query before running it, unlike every other engine here," +
+		" so a query containing one matches fewer documents and its latency is the cost of a smaller search"
+}
+
 func (e *engine) Close() error {
 	if e.store == nil {
 		return nil
