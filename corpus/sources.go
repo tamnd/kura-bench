@@ -31,6 +31,11 @@ type Source struct {
 	Tag string
 
 	// Commit is what the checkout is verified against after fetching.
+	//
+	// It is the commit the tag resolves to, not the tag object. Three of the
+	// six projects here use annotated tags, whose own hash is not the hash of
+	// anything that was ever checked out, and pinning one of those would fail
+	// the check below on every machine.
 	Commit string
 
 	// About says what the project is and why it is in the corpus.
@@ -60,14 +65,14 @@ func Sources() []Source {
 			Name:   "kubernetes",
 			URL:    "https://github.com/kubernetes/kubernetes",
 			Tag:    "v1.36.3",
-			Commit: "49c14f82ca9748897f0189be31cbf9c2f4085fc1",
+			Commit: "0f29094e5b73085e3802ecc1298ecae13866bfe6",
 			About:  "a large Go tree with a vendored dependency set",
 		},
 		{
 			Name:   "rust",
 			URL:    "https://github.com/rust-lang/rust",
 			Tag:    "1.97.1",
-			Commit: "bd3cd8fdf9945e13d317642df03363bfa1b4c30e",
+			Commit: "8bab26f4f68e0e26f0bb7960be334d5b520ea452",
 			About:  "the Rust compiler and its very large test suite",
 		},
 		{
@@ -88,7 +93,7 @@ func Sources() []Source {
 			Name:   "lucene",
 			URL:    "https://github.com/apache/lucene",
 			Tag:    "releases/lucene/10.5.1",
-			Commit: "6bde4304bc737c28212cbae91400a62844834b73",
+			Commit: "64ce863a2bea79c69c19c4d56268c26710ff0ff9",
 			About:  "the source of a search engine, indexed by search engines",
 		},
 	}
