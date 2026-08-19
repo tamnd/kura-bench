@@ -249,6 +249,46 @@ func joinNotes(build, query string) string {
 	return strings.TrimSpace(build + "; " + query)
 }
 
+// GraphPlan is how much of each operation a run asked for, as far as a report
+// has to say it.
+//
+// It is a copy of the plan the graphs package carries rather than that type,
+// because this package describes what a result looks like and knows nothing
+// about how a graph is fetched or how its answers are worked out, and a report
+// that pulled in the dataset machinery to print one sentence would be paying a
+// lot for a sentence.
+type GraphPlan struct {
+	Neighbour  int
+	TwoHop     int
+	Path       int
+	BFS        int
+	Iterations int
+	Damping    float64
+}
+
+// GraphHeader is the paragraph above a graph report, saying what graph was run
+// and how much of it was asked for.
+//
+// It is here rather than in either command because the two callers learn the
+// same facts from different places. The orchestrator has just been told them on
+// a command line, and the tool that rebuilds a report from result files has to
+// look them up. Both go through this, so rebuilding a report changes numbers
+// and never changes wording.
+func GraphHeader(host, about string, p GraphPlan) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Graph results on %s\n\n", host)
+	if about != "" {
+		fmt.Fprintf(&b, "%s.\n\n", about)
+	}
+	if p == (GraphPlan{}) {
+		return b.String()
+	}
+	fmt.Fprintf(&b, "The plan is %d neighbour lookups, %d two hop lookups, %d shortest paths, %d full traversals, and pagerank over %d iterations at damping %v.\n",
+		p.Neighbour, p.TwoHop, p.Path, p.BFS, p.Iterations, p.Damping)
+	b.WriteString("The nodes are a fixed sample, so every engine is asked about the same ones in the same order, and a run with fewer of them is a subset of a run with more.\n\n")
+	return b.String()
+}
+
 // GraphReport renders a set of graph results as markdown.
 //
 // The operations get a table each rather than a column each, because their

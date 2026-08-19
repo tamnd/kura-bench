@@ -341,19 +341,13 @@ func writeJSON(name string, res bench.GraphResult) error {
 	return os.WriteFile(name, append(b, '\n'), 0o644)
 }
 
-// reportHeader records how the run was invoked, because a table without the
-// command that produced it is not something anybody can repeat.
+// reportHeader says what graph was run and how much of it.
+//
+// The wording lives in the report package rather than here, because the tool
+// that rebuilds a report from the result files has to produce the same
+// paragraph and a second copy of it would drift.
 func reportHeader(cfg config, first bench.GraphResult, a graphs.Answers) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "# Graph results on %s\n\n", first.Machine.Host)
-	fmt.Fprintf(&b, "Graph %s from %s, %s.\n\n", cfg.label, cfg.dir, cfg.about)
-
-	p := a.Plan
-	fmt.Fprintf(&b, "The plan is %d neighbour lookups, %d two hop lookups, %d shortest paths, %d full traversals, and pagerank over %d iterations at damping %v.\n",
-		p.Neighbour, p.TwoHop, p.Path, p.BFS, p.Iterations, p.Damping)
-	b.WriteString("The nodes are a fixed sample, so every engine is asked about the same ones in the same order, and a run with fewer of them is a subset of a run with more.\n\n")
-
-	return b.String()
+	return bench.GraphHeader(first.Machine.Host, cfg.about, a.Plan.Report())
 }
 
 // slug is what tells one run's files from another's.

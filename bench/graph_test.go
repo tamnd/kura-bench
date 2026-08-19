@@ -1,6 +1,34 @@
 package bench
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestTheHeaderSaysWhatWasRunAndHowMuchOfIt(t *testing.T) {
+	got := GraphHeader("box", "The Google web graph", GraphPlan{
+		Neighbour: 1000, TwoHop: 100, Path: 100, BFS: 10, Iterations: 20, Damping: 0.85,
+	})
+	for _, want := range []string{
+		"# Graph results on box",
+		"The Google web graph.",
+		"1000 neighbour lookups",
+		"pagerank over 20 iterations at damping 0.85",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("got %q, want it to mention %q", got, want)
+		}
+	}
+}
+
+// A report rebuilt for a graph this build has never heard of still has to be a
+// report, and it must not describe a plan nobody told it about.
+func TestAHeaderWithNothingToSayIsJustTheTitle(t *testing.T) {
+	got := GraphHeader("box", "", GraphPlan{})
+	if got != "# Graph results on box\n\n" {
+		t.Errorf("got %q, want the title on its own", got)
+	}
+}
 
 // The two processes usually say the same thing, and the merged result should
 // say it once.
