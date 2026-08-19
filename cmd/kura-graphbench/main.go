@@ -185,6 +185,9 @@ func run(cfg config) error {
 			fmt.Fprintf(os.Stderr, "%s failed, leaving it out of the report: %v\n", r.name, err)
 			continue
 		}
+		if res.Incomplete != "" {
+			fmt.Fprintf(os.Stderr, "%s: %s, keeping what it did measure\n", r.name, res.Incomplete)
+		}
 		results = append(results, res)
 
 		name := filepath.Join(cfg.out, "graph-"+r.name+"-"+cfg.slug(res.Machine.Host)+".json")
@@ -220,13 +223,56 @@ func measure(cfg config, r runnerBin, work string) (bench.GraphResult, error) {
 
 	build, err := invoke(cfg, r, work, "build")
 	if err != nil {
+		var late tooSlow
+		if errors.As(err, &late) {
+			return incomplete(cfg, r, bench.GraphResult{}, late), nil
+		}
 		return bench.GraphResult{}, fmt.Errorf("build phase: %w", err)
 	}
 	query, err := invoke(cfg, r, work, "query")
 	if err != nil {
+		var late tooSlow
+		if errors.As(err, &late) {
+			// The load finished, so the store size and the edges per second
+			// are measurements and are kept. What is lost is the timings, and
+			// the report says which engine lost them.
+			return incomplete(cfg, r, build, late), nil
+		}
 		return bench.GraphResult{}, fmt.Errorf("query phase: %w", err)
 	}
 	return bench.MergeGraph(build, query), nil
+}
+
+// incomplete is what an engine that ran out of time gets instead of being
+// dropped from the run.
+//
+// The graph's name and the machine are filled in from what the orchestrator
+// knows, because they are what a report is filed under and an engine that
+// never wrote a result cannot say either of them itself.
+func incomplete(cfg config, r runnerBin, so bench.GraphResult, late tooSlow) bench.GraphResult {
+	so.Engine = r.name
+	so.Incomplete = late.Error()
+	if so.Dataset.Name == "" {
+		so.Dataset.Name = cfg.label
+	}
+	if so.Machine.Host == "" {
+		so.Machine = bench.Describe()
+	}
+	return so
+}
+
+// tooSlow is a phase that was still running when the deadline passed.
+//
+// It is a type rather than a message because it is the one failure that is a
+// result about the engine rather than a failure of the run, and the difference
+// has to survive being passed back up.
+type tooSlow struct {
+	phase string
+	after time.Duration
+}
+
+func (e tooSlow) Error() string {
+	return fmt.Sprintf("the %s phase did not finish within %s", e.phase, e.after)
 }
 
 // invoke runs a runner once and parses the one JSON object it writes.
@@ -267,7 +313,7 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.GraphResult, err
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return bench.GraphResult{}, fmt.Errorf("did not finish within %s", cfg.deadline)
+			return bench.GraphResult{}, tooSlow{phase: phase, after: cfg.deadline}
 		}
 		return bench.GraphResult{}, err
 	}

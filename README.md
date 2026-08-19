@@ -263,7 +263,7 @@ Useful flags:
 - `-ops neighbours,bfs` runs a subset of the operations, in report order whatever order they are given in.
 - `-graph graphdata/soc-livejournal-n500000` runs against a prepared directory rather than a named dataset, which is how a subgraph is measured.
 - `-workers 16` sets the concurrency for the several-in-flight phase, the default is the core count.
-- `-deadline 30m` gives up on a phase that runs longer than that and reports the engine as not having finished. There is no limit by default, because a slow number is worth having and a missing row is not, and it exists for the other case: an engine whose query cost is proportional to the match set does not stop, it just keeps going, and one of those will hold a whole run for as long as you let it.
+- `-deadline 30m` gives up on a phase that runs longer than that. The engine stays in the report with whatever the phases that did finish measured, and the tables it has no numbers for say it ran out of time. There is no limit by default, because a slow number is worth having and a missing row is not, and it exists for the other case: an engine whose query cost is proportional to the match set does not stop, it just keeps going, and one of those will hold a whole run for as long as you let it.
 - `-keep` leaves the built stores in place instead of deleting them.
 
 ## Rebuilding a report
