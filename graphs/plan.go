@@ -1,6 +1,10 @@
 package graphs
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/tamnd/kura-bench/bench"
+)
 
 // The five operations, which are the five shapes of work a graph store is
 // actually asked to do.
@@ -84,6 +88,22 @@ func DefaultPlan() Plan {
 		Iterations: 20,
 		Damping:    0.85,
 		Top:        10,
+	}
+}
+
+// Report is the plan in the shape a report states it in.
+//
+// The conversion is here rather than at the two places that need it, so that a
+// count which moves moves once. What it leaves out is Seeds and Top, which the
+// report says elsewhere or does not say at all.
+func (p Plan) Report() bench.GraphPlan {
+	return bench.GraphPlan{
+		Neighbour:  p.Neighbour,
+		TwoHop:     p.TwoHop,
+		Path:       p.Path,
+		BFS:        p.BFS,
+		Iterations: p.Iterations,
+		Damping:    p.Damping,
 	}
 }
 

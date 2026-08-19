@@ -223,12 +223,70 @@ func MergeGraph(build, query GraphResult) GraphResult {
 	// The build process never reads the seed file, so that half of the dataset
 	// line comes from the process that actually read it.
 	out.Dataset.Seeds = query.Dataset.Seeds
-	// Two notes are two sentences that were never written to sit together, so
-	// they are joined with something that keeps them apart on the page.
-	if query.Notes != "" && query.Notes != out.Notes {
-		out.Notes = strings.TrimSpace(strings.Trim(out.Notes+"; "+query.Notes, "; "))
-	}
+	out.Notes = joinNotes(build.Notes, query.Notes)
 	return out
+}
+
+// joinNotes puts the two processes' notes together.
+//
+// Usually they are the same sentence, written by the same runner twice. When
+// they are not, it is because the query process found out something the build
+// process could not know yet, and what it says then starts with what it said
+// before and goes on. So the longer of the two wins when one contains the
+// other, and only genuinely different notes are joined, with something between
+// them that keeps two sentences apart on the page.
+func joinNotes(build, query string) string {
+	switch {
+	case query == "":
+		return build
+	case build == "":
+		return query
+	case strings.Contains(query, build):
+		return query
+	case strings.Contains(build, query):
+		return build
+	}
+	return strings.TrimSpace(build + "; " + query)
+}
+
+// GraphPlan is how much of each operation a run asked for, as far as a report
+// has to say it.
+//
+// It is a copy of the plan the graphs package carries rather than that type,
+// because this package describes what a result looks like and knows nothing
+// about how a graph is fetched or how its answers are worked out, and a report
+// that pulled in the dataset machinery to print one sentence would be paying a
+// lot for a sentence.
+type GraphPlan struct {
+	Neighbour  int
+	TwoHop     int
+	Path       int
+	BFS        int
+	Iterations int
+	Damping    float64
+}
+
+// GraphHeader is the paragraph above a graph report, saying what graph was run
+// and how much of it was asked for.
+//
+// It is here rather than in either command because the two callers learn the
+// same facts from different places. The orchestrator has just been told them on
+// a command line, and the tool that rebuilds a report from result files has to
+// look them up. Both go through this, so rebuilding a report changes numbers
+// and never changes wording.
+func GraphHeader(host, about string, p GraphPlan) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Graph results on %s\n\n", host)
+	if about != "" {
+		fmt.Fprintf(&b, "%s.\n\n", about)
+	}
+	if p == (GraphPlan{}) {
+		return b.String()
+	}
+	fmt.Fprintf(&b, "The plan is %d neighbour lookups, %d two hop lookups, %d shortest paths, %d full traversals, and pagerank over %d iterations at damping %v.\n",
+		p.Neighbour, p.TwoHop, p.Path, p.BFS, p.Iterations, p.Damping)
+	b.WriteString("The nodes are a fixed sample, so every engine is asked about the same ones in the same order, and a run with fewer of them is a subset of a run with more.\n\n")
+	return b.String()
 }
 
 // GraphReport renders a set of graph results as markdown.

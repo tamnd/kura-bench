@@ -1,6 +1,6 @@
 # Graph results on vmi3112167
 
-Graph ca-grqc from graphdata/ca-grqc, The Arxiv General Relativity collaboration network, 5,242 authors and 14,490 collaborations stored in both directions.
+The Arxiv General Relativity collaboration network, 5,242 authors and 14,490 collaborations stored in both directions.
 
 The plan is 1000 neighbour lookups, 100 two hop lookups, 100 shortest paths, 10 full traversals, and pagerank over 20 iterations at damping 0.85.
 The nodes are a fixed sample, so every engine is asked about the same ones in the same order, and a run with fewer of them is a subset of a run with more.

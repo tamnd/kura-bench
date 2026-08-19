@@ -112,6 +112,47 @@ func TestItIsStableAcrossRuns(t *testing.T) {
 	}
 }
 
+// The description of the graph and the counts the run worked to are not in a
+// result file, and a rebuilt report that dropped them would be a table with
+// nothing above it saying what was measured.
+func TestARebuiltGraphReportStillSaysWhatTheGraphIs(t *testing.T) {
+	dir := t.TempDir()
+	writeResult(t, dir, "graph-csr-ca-grqc-srv.json", bench.GraphResult{
+		Engine:  "csr",
+		Machine: bench.Machine{Host: "srv"},
+		Dataset: bench.GraphStats{Name: "ca-grqc"},
+	})
+
+	if err := run(dir); err != nil {
+		t.Fatal(err)
+	}
+	body := readReport(t, filepath.Join(dir, "graph-report-ca-grqc-srv.md"))
+	for _, want := range []string{"collaboration network", "The plan is"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the report does not mention %q", want)
+		}
+	}
+}
+
+// A graph run outside the published set is a real thing the orchestrator can
+// do, and a rebuild of it must not attach another graph's description to it.
+func TestAGraphNobodyPublishedGetsNoDescription(t *testing.T) {
+	dir := t.TempDir()
+	writeResult(t, dir, "graph-csr-mine-srv.json", bench.GraphResult{
+		Engine:  "csr",
+		Machine: bench.Machine{Host: "srv"},
+		Dataset: bench.GraphStats{Name: "mine"},
+	})
+
+	if err := run(dir); err != nil {
+		t.Fatal(err)
+	}
+	body := readReport(t, filepath.Join(dir, "graph-report-mine-srv.md"))
+	if strings.Contains(body, "The plan is") {
+		t.Error("the report states a plan it was never told")
+	}
+}
+
 func TestAnEmptyDirectorySaysSo(t *testing.T) {
 	if err := run(t.TempDir()); err == nil {
 		t.Fatal("an empty directory came back without an error")

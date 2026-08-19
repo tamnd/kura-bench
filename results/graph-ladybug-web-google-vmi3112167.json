@@ -1,0 +1,139 @@
+{
+  "engine": "ladybug",
+  "version": "0.19.1",
+  "language": "c++",
+  "dataset": {
+    "name": "web-google",
+    "nodes": 875713,
+    "edges": 5105039,
+    "undirected": false,
+    "seeds": 1000
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 13.770203497,
+      "user_seconds": 20.605943,
+      "sys_seconds": 4.866335,
+      "peak_rss_bytes": 705437696,
+      "rss_bytes": 700567552,
+      "read_bytes": 0,
+      "write_bytes": 186462208
+    },
+    "bytes": 184233105,
+    "files": 3
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.339759774,
+      "user_seconds": 0.128385,
+      "sys_seconds": 0.039843,
+      "peak_rss_bytes": 57933824,
+      "rss_bytes": 57245696,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 57245696
+  },
+  "query": {
+    "usage": {
+      "wall_seconds": 247.773849912,
+      "user_seconds": 443.183898,
+      "sys_seconds": 47.904052,
+      "peak_rss_bytes": 896557056,
+      "rss_bytes": 897363968,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "ops": [
+      {
+        "op": "neighbours",
+        "runs": 1000,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.944186,
+        "median_ms": 6.814413,
+        "p90_ms": 22.779795,
+        "p99_ms": 104.15626,
+        "max_ms": 246.181539,
+        "concurrent": {
+          "workers": 6,
+          "queries": 1000,
+          "seconds": 4.986828337,
+          "median_ms": 17.406124,
+          "p99_ms": 190.674459
+        }
+      },
+      {
+        "op": "two-hop",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 4.468565,
+        "median_ms": 12.669548,
+        "p90_ms": 31.039128,
+        "p99_ms": 172.803703,
+        "max_ms": 173.230022,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.800910504,
+          "median_ms": 37.185302,
+          "p99_ms": 173.13513
+        }
+      },
+      {
+        "op": "shortest-path",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 12.648533,
+        "median_ms": 901.082683,
+        "p90_ms": 2506.899314,
+        "p99_ms": 3171.590348,
+        "max_ms": 3522.327316,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 74.202181877,
+          "median_ms": 4109.845804,
+          "p99_ms": 9176.487237
+        }
+      },
+      {
+        "op": "bfs",
+        "runs": 10,
+        "correct": 0.2,
+        "mismatches": 16,
+        "min_ms": 7.734226,
+        "median_ms": 4206.151824,
+        "p90_ms": 5481.082965,
+        "p99_ms": 6394.259342,
+        "max_ms": 6394.259342
+      },
+      {
+        "op": "pagerank",
+        "runs": 0,
+        "correct": 0,
+        "mismatches": 0,
+        "min_ms": 0,
+        "median_ms": 0,
+        "p90_ms": 0,
+        "p99_ms": 0,
+        "max_ms": 0,
+        "unsupported": "its PageRank lives in an extension that is downloaded at first use, and a benchmark that reaches the network mid run is measuring the network"
+      }
+    ]
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "amd64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 6.72,
+    "memory_free_bytes": 6455214080,
+    "dedicated": false
+  },
+  "notes": "a property graph database reached through its C API, loaded with COPY from a CSV the way its own documentation loads a graph, and queried in Cypher rather than by walking the adjacency from the runner, and its variable length patterns take an upper bound of at most 30 hops, which this graph is deeper than, so the traversals were cut off there and the correctness table says so rather than the timings quietly being for a smaller job"
+}

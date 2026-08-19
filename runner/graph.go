@@ -186,9 +186,11 @@ func runGraph(cfg GraphConfig, newEngine func(GraphConfig) (GraphEngine, error))
 		Language: info.Language,
 		Machine:  bench.Describe(),
 	}
-	if n, ok := eng.(GraphNoter); ok {
-		res.Notes = n.Note()
-	}
+	// The note is asked for after the run rather than before it, because some
+	// of what a store has to say about its own numbers is only true once the
+	// numbers exist. A traversal that came back at the depth bound is the case
+	// this was written for.
+	var warm string
 
 	switch cfg.Phase {
 	case "build":
@@ -209,8 +211,7 @@ func runGraph(cfg GraphConfig, newEngine func(GraphConfig) (GraphEngine, error))
 		// Reopening in the same process is not a cold start, and the result
 		// says so. A real one needs a second process, which is what the
 		// orchestrator does when it runs the two phases separately.
-		res.Notes = strings.TrimSpace(res.Notes +
-			" the open phase ran in the same process as the build, so it is warmer than a real cold start")
+		warm = "the open phase ran in the same process as the build, so it is warmer than a real cold start"
 		fresh, err := newEngine(cfg)
 		if err != nil {
 			return err
@@ -221,6 +222,13 @@ func runGraph(cfg GraphConfig, newEngine func(GraphConfig) (GraphEngine, error))
 		}
 	default:
 		return fmt.Errorf("unknown phase %q", cfg.Phase)
+	}
+
+	if n, ok := eng.(GraphNoter); ok {
+		res.Notes = n.Note()
+	}
+	if warm != "" {
+		res.Notes = strings.TrimSpace(res.Notes + " " + warm)
 	}
 
 	if err := eng.Close(); err != nil {

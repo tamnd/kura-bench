@@ -140,8 +140,18 @@ func vectorHeader(first bench.VectorResult) string {
 	return fmt.Sprintf("# Vector results on %s\n\n", first.Machine.Host)
 }
 
+// graphHeader says what graph the run was over.
+//
+// The sentence describing the graph and the counts the run worked to are not in
+// a result file, so they are looked up by the graph's name. A run over a graph
+// this build has never heard of, which is what the orchestrator's own -graph
+// flag produces, gets the title and nothing it cannot stand behind.
 func graphHeader(first bench.GraphResult) string {
-	return fmt.Sprintf("# Graph results on %s\n\n", first.Machine.Host)
+	d, ok := graphs.Datasets[first.Dataset.Name]
+	if !ok {
+		return bench.GraphHeader(first.Machine.Host, "", bench.GraphPlan{})
+	}
+	return bench.GraphHeader(first.Machine.Host, d.About, graphs.DefaultPlan().Fit(d.Nodes).Report())
 }
 
 func read(path string, into any) error {
