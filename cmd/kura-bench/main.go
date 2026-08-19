@@ -113,6 +113,9 @@ func run(cfg config) error {
 			fmt.Fprintf(os.Stderr, "%s failed, leaving it out of the report: %v\n", r.name, err)
 			continue
 		}
+		if res.Incomplete != "" {
+			fmt.Fprintf(os.Stderr, "%s: %s, keeping what it did measure\n", r.name, res.Incomplete)
+		}
 		results = append(results, res)
 
 		name := filepath.Join(cfg.out, r.name+"-"+hostSlug(res.Machine.Host)+".json")
@@ -150,13 +153,39 @@ func measure(cfg config, r runnerBin, work string) (bench.Result, error) {
 
 	index, err := invoke(cfg, r, work, "index")
 	if err != nil {
+		var late bench.TooSlow
+		if errors.As(err, &late) {
+			return incomplete(r, bench.Result{}, late), nil
+		}
 		return bench.Result{}, fmt.Errorf("index phase: %w", err)
 	}
 	query, err := invoke(cfg, r, work, "query")
 	if err != nil {
+		var late bench.TooSlow
+		if errors.As(err, &late) {
+			// The index finished, so its size and its throughput are
+			// measurements and are kept. What is lost is the query timings, and
+			// the report says which engine lost them.
+			return incomplete(r, index, late), nil
+		}
 		return bench.Result{}, fmt.Errorf("query phase: %w", err)
 	}
 	return bench.Merge(index, query), nil
+}
+
+// incomplete is what an engine that ran out of time gets instead of being
+// dropped from the run.
+//
+// The machine is filled in from what the orchestrator knows, because it is what
+// a report is filed under and an engine that never wrote a result cannot say it
+// itself.
+func incomplete(r runnerBin, so bench.Result, late bench.TooSlow) bench.Result {
+	so.Engine = r.name
+	so.Incomplete = late.Error()
+	if so.Machine.Host == "" {
+		so.Machine = bench.Describe()
+	}
+	return so
 }
 
 // invoke runs a runner once and parses the one JSON object it writes.
@@ -184,8 +213,8 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
 	// engine whose query cost is proportional to the match set does not stop,
 	// it just keeps going, and one of those will hold a whole run for as long
 	// as you let it. Setting -deadline says how long that is worth waiting,
-	// and the engine is then reported as having failed to finish rather than
-	// quietly left out.
+	// and the engine then keeps whatever the phases that did finish measured
+	// rather than being quietly left out.
 	ctx := context.Background()
 	if cfg.deadline > 0 {
 		var cancel context.CancelFunc
@@ -201,7 +230,7 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return bench.Result{}, fmt.Errorf("did not finish within %s", cfg.deadline)
+			return bench.Result{}, bench.TooSlow{Phase: phase, After: cfg.deadline}
 		}
 		return bench.Result{}, err
 	}

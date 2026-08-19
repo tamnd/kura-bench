@@ -223,7 +223,7 @@ func measure(cfg config, r runnerBin, work string) (bench.GraphResult, error) {
 
 	build, err := invoke(cfg, r, work, "build")
 	if err != nil {
-		var late tooSlow
+		var late bench.TooSlow
 		if errors.As(err, &late) {
 			return incomplete(cfg, r, bench.GraphResult{}, late), nil
 		}
@@ -231,7 +231,7 @@ func measure(cfg config, r runnerBin, work string) (bench.GraphResult, error) {
 	}
 	query, err := invoke(cfg, r, work, "query")
 	if err != nil {
-		var late tooSlow
+		var late bench.TooSlow
 		if errors.As(err, &late) {
 			// The load finished, so the store size and the edges per second
 			// are measurements and are kept. What is lost is the timings, and
@@ -249,7 +249,7 @@ func measure(cfg config, r runnerBin, work string) (bench.GraphResult, error) {
 // The graph's name and the machine are filled in from what the orchestrator
 // knows, because they are what a report is filed under and an engine that
 // never wrote a result cannot say either of them itself.
-func incomplete(cfg config, r runnerBin, so bench.GraphResult, late tooSlow) bench.GraphResult {
+func incomplete(cfg config, r runnerBin, so bench.GraphResult, late bench.TooSlow) bench.GraphResult {
 	so.Engine = r.name
 	so.Incomplete = late.Error()
 	if so.Dataset.Name == "" {
@@ -259,20 +259,6 @@ func incomplete(cfg config, r runnerBin, so bench.GraphResult, late tooSlow) ben
 		so.Machine = bench.Describe()
 	}
 	return so
-}
-
-// tooSlow is a phase that was still running when the deadline passed.
-//
-// It is a type rather than a message because it is the one failure that is a
-// result about the engine rather than a failure of the run, and the difference
-// has to survive being passed back up.
-type tooSlow struct {
-	phase string
-	after time.Duration
-}
-
-func (e tooSlow) Error() string {
-	return fmt.Sprintf("the %s phase did not finish within %s", e.phase, e.after)
 }
 
 // invoke runs a runner once and parses the one JSON object it writes.
@@ -313,7 +299,7 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.GraphResult, err
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return bench.GraphResult{}, tooSlow{phase: phase, after: cfg.deadline}
+			return bench.GraphResult{}, bench.TooSlow{Phase: phase, After: cfg.deadline}
 		}
 		return bench.GraphResult{}, err
 	}

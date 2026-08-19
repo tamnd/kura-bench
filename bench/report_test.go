@@ -1,0 +1,110 @@
+package bench
+
+import (
+	"strings"
+	"testing"
+)
+
+// The defect this was written for: an engine that ran out of time was left out
+// of the report, so a reader had no reason to think it had ever been asked.
+func TestAnEngineThatRanOutOfTimeIsStillInTheTextReport(t *testing.T) {
+	got := Report([]Result{
+		indexedAndSearched("bleve"),
+		{
+			Engine:     "sqlitefts",
+			Corpus:     CorpusStats{Documents: 500_000, Bytes: 550 << 20},
+			Machine:    Machine{Host: "box"},
+			Index:      IndexPhase{Usage: Usage{WallSeconds: 147}, Bytes: 648 << 20, Files: 3},
+			Incomplete: "the query phase did not finish within 45m0s",
+		},
+	})
+
+	for _, want := range []string{
+		"| sqlitefts | ran out of time |",
+		"- sqlitefts: the query phase did not finish within 45m0s",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the report does not contain %q:\n%s", want, got)
+		}
+	}
+	// The index phase did finish, so it is a measurement and belongs in the
+	// tables it was measured for.
+	for _, table := range []string{"## Indexing", "## Storage"} {
+		if body := section(t, got, table); !strings.Contains(body, "sqlitefts") {
+			t.Errorf("%s dropped the figures the engine did have:\n%s", table, body)
+		}
+	}
+}
+
+// An engine that never got as far as indexing has no index, and a row of zeros
+// would read as the fastest indexing in the table.
+func TestATextPhaseThatNeverRanIsNotARowOfZeros(t *testing.T) {
+	got := Report([]Result{
+		indexedAndSearched("bleve"),
+		{
+			Engine:     "sqlitefts",
+			Machine:    Machine{Host: "box"},
+			Incomplete: "the index phase did not finish within 45m0s",
+		},
+	})
+
+	for _, table := range []string{"## Indexing", "## Storage", "## Cold start"} {
+		if body := section(t, got, table); strings.Contains(body, "sqlitefts") {
+			t.Errorf("%s has a row for a phase that never ran:\n%s", table, body)
+		}
+	}
+}
+
+// Not measured and not supported are things an engine said about itself, and an
+// engine whose query process was killed said neither.
+func TestATimedOutEngineIsNotCalledUnsupported(t *testing.T) {
+	got := Report([]Result{
+		indexedAndSearched("bleve"),
+		{
+			Engine:     "sqlitefts",
+			Machine:    Machine{Host: "box"},
+			Index:      IndexPhase{Usage: Usage{WallSeconds: 147}},
+			Incomplete: "the query phase did not finish within 45m0s",
+		},
+	})
+
+	for _, table := range []string{"## Search, several in flight", "## Incremental update"} {
+		if body := section(t, got, table); strings.Contains(body, "sqlitefts") {
+			t.Errorf("%s speaks for an engine that never got there:\n%s", table, body)
+		}
+	}
+}
+
+// The engine that ran out of time may sort first, and the section saying what
+// was indexed has to come from an engine that indexed it.
+func TestTheCorpusIsDescribedByAnEngineThatIndexedIt(t *testing.T) {
+	got := Report([]Result{
+		{
+			Engine:     "aaa",
+			Machine:    Machine{Host: "box"},
+			Incomplete: "the index phase did not finish within 45m0s",
+		},
+		indexedAndSearched("bleve"),
+	})
+
+	if !strings.Contains(got, "500,000 documents") {
+		t.Errorf("the report does not say what corpus was indexed:\n%s", got)
+	}
+}
+
+// indexedAndSearched is an engine that did everything it was asked.
+func indexedAndSearched(name string) Result {
+	return Result{
+		Engine:  name,
+		Version: "1.0.0",
+		Corpus:  CorpusStats{Documents: 500_000, Bytes: 550 << 20},
+		Machine: Machine{Host: "box"},
+		Index:   IndexPhase{Usage: Usage{WallSeconds: 120}, Bytes: 400 << 20, Files: 40},
+		Open:    OpenPhase{Usage: Usage{WallSeconds: 0.1}},
+		Search: SearchPhase{
+			Queries:    []QueryStat{{Query: "kernel", Hits: 900, Runs: 20, MedianMS: 12}},
+			Concurrent: &ConcurrentStat{Workers: 8, Queries: 5000, Seconds: 20, MedianMS: 30},
+		},
+		Update: &UpdatePhase{Documents: 5000, IndexBytesAfter: 420 << 20},
+	}
+}

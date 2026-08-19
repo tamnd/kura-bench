@@ -46,7 +46,19 @@ type VectorResult struct {
 	// Notes is for anything that would otherwise make a number misleading,
 	// such as an engine that had to be given a smaller base set to fit.
 	Notes string `json:"notes,omitempty"`
+
+	// Incomplete says a phase was still running when the run gave up on it, and
+	// is empty for a run that finished. See [GraphResult.Incomplete] for why an
+	// engine that ran out of time stays in the report.
+	Incomplete string `json:"incomplete,omitempty"`
 }
+
+// built says the build phase produced a measurement, which is not the same as
+// the engine having been asked to build.
+func (r VectorResult) built() bool { return r.Build.Usage.WallSeconds > 0 }
+
+// searched says the query phase got as far as timing an operating point.
+func (r VectorResult) searched() bool { return len(r.Search.Points) > 0 }
 
 // DatasetStats is the input as the runner read it off disk.
 type DatasetStats struct {
@@ -300,9 +312,21 @@ func VectorReport(results []VectorResult) string {
 	copy(sorted, results)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Engine < sorted[j].Engine })
 
+	// The machine and the dataset are read off the first result that measured
+	// them rather than off the first result. An engine that ran out of time
+	// while building is in the list with nothing but its name, and taking the
+	// dataset from it would blank the section that says what was measured.
+	head := sorted[0]
+	for _, r := range sorted {
+		if r.Dataset.Vectors > 0 {
+			head = r
+			break
+		}
+	}
+
 	var b strings.Builder
-	writeMachine(&b, sorted[0].Machine)
-	writeDataset(&b, sorted[0].Dataset)
+	writeMachine(&b, head.Machine)
+	writeDataset(&b, head.Dataset)
 	writeHeadline(&b, sorted)
 	writeBuild(&b, sorted)
 	writeVectorStorage(&b, sorted)
@@ -327,6 +351,13 @@ func writeHeadline(b *strings.Builder, rs []VectorResult) {
 	b.WriteString("| engine | version | at recall 0.90 | settings | at recall 0.99 | settings |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range rs {
+		// This is the table somebody comes to the report for, so the engine
+		// that has no numbers for it says so here rather than being absent. Not
+		// reached would be a claim about a curve that was never measured.
+		if !r.searched() {
+			fmt.Fprintf(b, "| %s | %s | %s | | | |\n", r.Engine, r.Version, missing(r.Incomplete))
+			continue
+		}
 		lo, loOK := r.At(0.90)
 		hi, hiOK := r.At(0.99)
 		fmt.Fprintf(b, "| %s | %s | %s | %s | %s | %s |\n",
@@ -352,27 +383,43 @@ func params(p VectorPoint, ok bool) string {
 }
 
 func writeBuild(b *strings.Builder, rs []VectorResult) {
+	var rows []string
+	for _, r := range rs {
+		if !r.built() {
+			continue
+		}
+		u := r.Build.Usage
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s | %.1f | %.1fx | %s |",
+			r.Engine, secs(u.WallSeconds), count(int(r.VectorsPerSecond())),
+			u.CPUSeconds(), u.Parallelism(), mb(u.PeakRSSBytes)))
+	}
+	if len(rows) == 0 {
+		return
+	}
 	fmt.Fprintf(b, "## Building the index\n\n")
 	b.WriteString("| engine | wall | vectors/s | CPU s | parallelism | peak RSS |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
-	for _, r := range rs {
-		u := r.Build.Usage
-		fmt.Fprintf(b, "| %s | %s | %s | %.1f | %.1fx | %s |\n",
-			r.Engine, secs(u.WallSeconds), count(int(r.VectorsPerSecond())),
-			u.CPUSeconds(), u.Parallelism(), mb(u.PeakRSSBytes))
-	}
+	fmt.Fprintf(b, "%s\n", strings.Join(rows, "\n"))
 	b.WriteString("\nBuild time is the cost of changing your mind about an index, and on a graph index it is the largest number in this report.\n\n")
 }
 
 func writeVectorStorage(b *strings.Builder, rs []VectorResult) {
+	var rows []string
+	for _, r := range rs {
+		if !r.built() {
+			continue
+		}
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s | %.0f | %.2fx |",
+			r.Engine, mb(r.Build.Bytes), count(r.Build.Files),
+			r.BytesPerVector(), r.IndexRatio()))
+	}
+	if len(rows) == 0 {
+		return
+	}
 	fmt.Fprintf(b, "## Storage\n\n")
 	b.WriteString("| engine | index on disk | files | bytes per vector | index over raw vectors |\n")
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
-	for _, r := range rs {
-		fmt.Fprintf(b, "| %s | %s | %s | %.0f | %.2fx |\n",
-			r.Engine, mb(r.Build.Bytes), count(r.Build.Files),
-			r.BytesPerVector(), r.IndexRatio())
-	}
+	fmt.Fprintf(b, "%s\n", strings.Join(rows, "\n"))
 	b.WriteString("\nBelow one means the engine is not keeping the full precision vectors, which is the whole point of a quantizing index and is also where its recall ceiling comes from.\n")
 	b.WriteString("Above one is the cost of a graph, which buys the search time back.\n\n")
 }
@@ -399,8 +446,8 @@ func writeCurve(b *strings.Builder, rs []VectorResult) {
 	fmt.Fprintf(b, "%s\n%s\n", head, rule)
 
 	for _, r := range rs {
-		if len(r.Search.Points) == 0 {
-			fmt.Fprintf(b, "| %s | | not measured | | | | |", r.Engine)
+		if !r.searched() {
+			fmt.Fprintf(b, "| %s | | %s | | | | |", r.Engine, missing(r.Incomplete))
 			if perPoint {
 				b.WriteString(" | |")
 			}
@@ -447,8 +494,8 @@ func pointBuild(p VectorPoint) string {
 func writeVectorNotes(b *strings.Builder, rs []VectorResult) {
 	var lines []string
 	for _, r := range rs {
-		if r.Notes != "" {
-			lines = append(lines, fmt.Sprintf("- %s: %s", r.Engine, r.Notes))
+		if note := noteFor(r.Notes, r.Incomplete); note != "" {
+			lines = append(lines, fmt.Sprintf("- %s: %s", r.Engine, note))
 		}
 	}
 	if len(lines) == 0 {
@@ -458,7 +505,8 @@ func writeVectorNotes(b *strings.Builder, rs []VectorResult) {
 }
 
 // vectorOpens borrows the text suite's cold start table, since opening an index
-// off disk is the same measurement whatever is in it.
+// off disk is the same measurement whatever is in it. The table drops the
+// engines that never opened anything.
 func vectorOpens(rs []VectorResult) []Result {
 	out := make([]Result, len(rs))
 	for i, r := range rs {

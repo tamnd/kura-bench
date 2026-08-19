@@ -154,6 +154,9 @@ func run(cfg config) error {
 			fmt.Fprintf(os.Stderr, "%s failed, leaving it out of the report: %v\n", r.name, err)
 			continue
 		}
+		if res.Incomplete != "" {
+			fmt.Fprintf(os.Stderr, "%s: %s, keeping what it did measure\n", r.name, res.Incomplete)
+		}
 		results = append(results, res)
 
 		name := filepath.Join(cfg.out, "vec-"+r.name+"-"+cfg.slug(res.Machine.Host)+".json")
@@ -189,13 +192,45 @@ func measure(cfg config, r runnerBin, work string) (bench.VectorResult, error) {
 
 	build, err := invoke(cfg, r, work, "build")
 	if err != nil {
+		var late bench.TooSlow
+		if errors.As(err, &late) {
+			return incomplete(cfg, r, bench.VectorResult{}, late), nil
+		}
 		return bench.VectorResult{}, fmt.Errorf("build phase: %w", err)
 	}
 	query, err := invoke(cfg, r, work, "query")
 	if err != nil {
+		var late bench.TooSlow
+		if errors.As(err, &late) {
+			// The build finished, so the index size and the build rate are
+			// measurements and are kept. What is lost is the curve, and the
+			// report says which engine lost it.
+			return incomplete(cfg, r, build, late), nil
+		}
 		return bench.VectorResult{}, fmt.Errorf("query phase: %w", err)
 	}
 	return bench.MergeVector(build, query), nil
+}
+
+// incomplete is what an engine that ran out of time gets instead of being
+// dropped from the run.
+//
+// The dataset's name, the metric and the machine are filled in from what the
+// orchestrator knows, because they are what a report is filed under and an
+// engine that never wrote a result cannot say any of them itself.
+func incomplete(cfg config, r runnerBin, so bench.VectorResult, late bench.TooSlow) bench.VectorResult {
+	so.Engine = r.name
+	so.Incomplete = late.Error()
+	if so.Dataset.Name == "" {
+		so.Dataset.Name = cfg.dataset.Name
+	}
+	if so.Dataset.Metric == "" {
+		so.Dataset.Metric = string(cfg.metric)
+	}
+	if so.Machine.Host == "" {
+		so.Machine = bench.Describe()
+	}
+	return so
 }
 
 // invoke runs a runner once and parses the one JSON object it writes.
@@ -229,8 +264,9 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.VectorResult, er
 	//
 	// It is a flag because an engine that is merely slow and one that will
 	// never finish look identical from outside. Setting -deadline says how
-	// long the difference is worth waiting for, and the engine is then
-	// reported as having failed to finish rather than quietly left out.
+	// long the difference is worth waiting for, and the engine then keeps
+	// whatever the phases that did finish measured rather than being quietly
+	// left out.
 	ctx := context.Background()
 	if cfg.deadline > 0 {
 		var cancel context.CancelFunc
@@ -244,7 +280,7 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.VectorResult, er
 	start := time.Now()
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return bench.VectorResult{}, fmt.Errorf("did not finish within %s", cfg.deadline)
+			return bench.VectorResult{}, bench.TooSlow{Phase: phase, After: cfg.deadline}
 		}
 		return bench.VectorResult{}, err
 	}

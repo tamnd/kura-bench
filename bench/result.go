@@ -82,7 +82,19 @@ type Result struct {
 	// as an engine that could not express one of the filters, or a phase that
 	// was skipped and why.
 	Notes string `json:"notes,omitempty"`
+
+	// Incomplete says a phase was still running when the run gave up on it, and
+	// is empty for a run that finished. See [GraphResult.Incomplete] for why an
+	// engine that ran out of time stays in the report.
+	Incomplete string `json:"incomplete,omitempty"`
 }
+
+// indexed says the index phase produced a measurement, which is not the same as
+// the engine having been asked to index.
+func (r Result) indexed() bool { return r.Index.Usage.WallSeconds > 0 }
+
+// searched says the query phase got as far as timing the query set.
+func (r Result) searched() bool { return len(r.Search.Queries) > 0 }
 
 // CorpusStats is the input as the runner saw it.
 type CorpusStats struct {
