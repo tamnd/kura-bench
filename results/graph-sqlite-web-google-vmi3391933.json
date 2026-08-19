@@ -1,0 +1,62 @@
+{
+  "engine": "sqlite",
+  "version": "v1.56.0",
+  "language": "go",
+  "dataset": {
+    "name": "web-google",
+    "nodes": 875713,
+    "edges": 5105039,
+    "undirected": false,
+    "seeds": 0
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 149.327425311,
+      "user_seconds": 56.781833,
+      "sys_seconds": 15.264046,
+      "peak_rss_bytes": 602537984,
+      "rss_bytes": 440209408,
+      "read_bytes": 98304,
+      "write_bytes": 339742720
+    },
+    "bytes": 169340928,
+    "files": 3
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0,
+      "user_seconds": 0,
+      "sys_seconds": 0,
+      "peak_rss_bytes": 0,
+      "rss_bytes": 0,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 0
+  },
+  "query": {
+    "usage": {
+      "wall_seconds": 0,
+      "user_seconds": 0,
+      "sys_seconds": 0,
+      "peak_rss_bytes": 0,
+      "rss_bytes": 0,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "ops": null
+  },
+  "machine": {
+    "host": "vmi3391933",
+    "os": "linux",
+    "arch": "amd64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 8,
+    "memory_bytes": 25199222784,
+    "load_before": 38.74,
+    "memory_free_bytes": 3301109760,
+    "dedicated": false
+  },
+  "notes": "the edges live in one table with a covering index on both columns, and the traversals walk it a level at a time from Go, which is how a relational store is used as a graph in practice",
+  "incomplete": "the query phase did not finish within 45m0s"
+}
