@@ -7,19 +7,30 @@ ROOT ?= corpus
 
 GO_RUNNERS := bleve sqlitefts genba
 RUST_RUNNERS := tantivy seekstorm
+RUST_VECRUNNERS := exact turbovec hnsw
 RUST := runners/rust
+
+DATA ?= vecdata
+DATASET ?= sift
+METRIC ?= euclidean
 
 .PHONY: all
 all: build
 
 .PHONY: build
-build: $(BIN)/kura-bench $(BIN)/kura-corpus go-runners rust-runners
+build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-vectors $(BIN)/kura-vecbench go-runners rust-runners
 
 $(BIN)/kura-bench: $(shell find cmd/kura-bench bench -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-bench
 
 $(BIN)/kura-corpus: $(shell find cmd/kura-corpus corpus -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-corpus
+
+$(BIN)/kura-vectors: $(shell find cmd/kura-vectors vectors -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-vectors
+
+$(BIN)/kura-vecbench: $(shell find cmd/kura-vecbench bench vectors -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-vecbench
 
 .PHONY: go-runners
 go-runners:
@@ -37,6 +48,9 @@ rust-runners:
 		$(CARGO) build --release --manifest-path $(RUST)/Cargo.toml && \
 		for r in $(RUST_RUNNERS); do \
 			cp $(RUST)/target/release/$$r-runner $(BIN)/$$r-runner || exit 1; \
+		done && \
+		for r in $(RUST_VECRUNNERS); do \
+			cp $(RUST)/target/release/$$r-vecrunner $(BIN)/$$r-vecrunner || exit 1; \
 		done; \
 	else \
 		echo "no cargo on this machine, skipping the rust runners"; \
@@ -67,6 +81,16 @@ corpus: $(BIN)/kura-corpus
 .PHONY: bench
 bench: build
 	$(BIN)/kura-bench -corpus $(CORPUS) -queries $(QUERIES) -bin $(BIN) -out results
+
+# Fetches the vector dataset. Half a gigabyte for SIFT and four for GIST, and
+# like the corpus it only has to happen once per machine.
+.PHONY: vectors
+vectors: $(BIN)/kura-vectors
+	$(BIN)/kura-vectors -dataset $(DATASET) -metric $(METRIC) -out $(DATA)
+
+.PHONY: vecbench
+vecbench: build
+	$(BIN)/kura-vecbench -dataset $(DATASET) -metric $(METRIC) -data $(DATA) -bin $(BIN) -out results
 
 .PHONY: clean
 clean:

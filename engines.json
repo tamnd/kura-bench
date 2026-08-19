@@ -42,6 +42,33 @@
       "source": "https://github.com/SeekStorm/SeekStorm"
     },
     {
+      "name": "turbovec",
+      "suite": "vector",
+      "language": "rust",
+      "registry": "crate",
+      "package": "turbovec",
+      "source": "https://github.com/RyanCodrai/turbovec",
+      "note": "Ranks by maximum inner product, so it is only ever run against inner product ground truth. Its bit width is fixed when the index is built, so each operating point is a separate index."
+    },
+    {
+      "name": "hnsw",
+      "suite": "vector",
+      "language": "rust",
+      "registry": "crate",
+      "package": "hnsw_rs",
+      "source": "https://github.com/jean-pierreBoth/hnswlib-rs",
+      "note": "Euclidean and cosine. Built at the connection and construction settings hnswlib has defaulted to for years rather than settings picked for this benchmark."
+    },
+    {
+      "name": "exact",
+      "suite": "vector",
+      "language": "rust",
+      "registry": "none",
+      "package": "",
+      "source": "https://github.com/tamnd/kura-bench",
+      "note": "The brute force scan. It has no library behind it, so there is no version to fall behind, and it is what every approximate index in the vector table is measured against."
+    },
+    {
       "name": "genba",
       "suite": "text",
       "language": "go",

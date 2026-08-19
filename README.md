@@ -2,9 +2,13 @@
 
 A benchmark suite for search engines, built to produce numbers that survive being argued with.
 
-Every engine here indexes the same documents in the same order, is searched with the same queries, and is measured by the operating system rather than by its own stopwatch.
+Every engine here indexes the same data in the same order, is searched with the same queries, and is measured by the operating system rather than by its own stopwatch.
 Nothing is simulated and nothing is generated.
-The corpus is real source trees, the queries are the sort of thing people actually type, and every figure in a report came from a process that really did the work.
+The corpus is real source trees, the vectors are the published SIFT and GIST descriptors with the ground truth that came with them, the queries are the sort of thing people actually type, and every figure in a report came from a process that really did the work.
+
+There are two suites.
+`kura-bench` measures full text engines and `kura-vecbench` measures vector indexes.
+They share the machine description, the process counters and the report writer, because two engines timed by two pieces of code are not being compared to each other.
 
 ## Why it exists
 
@@ -17,7 +21,7 @@ So the corpus became one JSON lines file.
 Reading it is sequential, it fits in the page cache, and the same file can be copied to another machine and produce a comparable result.
 What is left after that is the engine.
 
-## What is measured
+## What is measured, in the text suite
 
 Indexing, and how it scales with the corpus.
 Documents per second, megabytes of text per second, wall time, user and system CPU time separately, the parallelism the engine actually achieved, peak resident memory, and the bytes it read and wrote to get there.
@@ -41,7 +45,27 @@ Machine.
 Every result carries the host, the CPU, the core count, the memory, the load average before the run started and the free memory at that moment.
 A run on a machine that was already busy is marked as not dedicated, and the report says so, because a number taken on a loaded box is worth reporting and is not worth comparing.
 
+## What is measured, in the vector suite
+
+Everything above that still applies: build time and its parallelism, index size on disk against the size of the raw float32 vectors, cold start in a second process, single query latency, and throughput with several in flight.
+
+What is different is accuracy.
+A text engine either found the document or it did not, and an approximate vector index is only as fast as it is inaccurate.
+So an index does not have one speed, it has a curve, and a single number taken from anywhere on that curve can be made to say whatever you want.
+Each runner is asked to search at several settings, reports the recall it reached at each, and the report compares the engines at equal recall rather than at each engine's favourite setting.
+
+Recall is scored against exact ground truth.
+For Euclidean that is the file published with the dataset, computed by somebody else, which makes the exact scan's recall a real check on this whole suite: it has to come back at one, and anything else means the files are being read wrongly and every other figure is wrong the same way.
+Cosine and inner product have no published ground truth, so it is computed once here by a full exact scan on every core and cached next to the dataset.
+
+The metric is a first class part of a result and not a footnote.
+A quantizing index built for maximum inner product, scored against Euclidean ground truth, comes back at about a tenth and looks like a bad index.
+It is not a bad index, it is answering a different question.
+Every runner is told which metric the run is under and refuses the run if it cannot answer that one, so a mismatch is an error rather than a number.
+
 ## Engines
+
+Text:
 
 | Engine | Language | What it is |
 | --- | --- | --- |
@@ -51,9 +75,18 @@ A run on a machine that was already busy is marked as not dedicated, and the rep
 | seekstorm | Rust | A newer memory mapped index making strong latency claims, worth checking |
 | genba | Go | Our own index, the reason the rest of this exists |
 
+Vector:
+
+| Engine | Language | Metrics | What it is |
+| --- | --- | --- | --- |
+| exact | Rust | all three | The brute force scan, the thing every approximate index is measured against |
+| hnsw | Rust | euclidean, cosine | The graph index, at the connection and construction settings hnswlib has defaulted to for years |
+| turbovec | Rust | inner product | A quantizing index, one index per bit width because the width is fixed when it is built |
+
 Each engine is a separate binary that speaks a small contract: create, add a batch, flush, open, search, close.
 Adding one is a hundred lines and does not touch the harness.
 The Go runners live under `runners/`, one directory each, and the Rust runners share a cargo workspace at `runners/rust` so that the same measuring code times all of them.
+A text runner is called `<engine>-runner` and a vector runner `<engine>-vecrunner`, both built into `bin/`, and each suite only ever picks up its own.
 
 Every engine is pinned to a version and `kura-versions` compares each pin against its registry.
 A workflow runs it every Monday and opens an issue when something has fallen behind, because a benchmark against a two year old release is a benchmark against nothing.
@@ -82,8 +115,8 @@ Every engine stores the document body, so the index size comparison is like for 
 make build
 ```
 
-That builds the orchestrator, the corpus builder and every runner into `bin/`.
-The Rust runner is skipped with a message if there is no cargo on the machine, and the report says which engines ran.
+That builds both orchestrators, the corpus builder, the dataset fetcher and every runner into `bin/`.
+The Rust runners are skipped with a message if there is no cargo on the machine, and the report says which engines ran.
 
 Build a corpus from checkouts you name:
 
@@ -117,6 +150,39 @@ Useful flags:
 - `-workers 16` sets the concurrency for the several-in-flight phase, the default is the core count.
 - `-keep` leaves the built indexes in place instead of deleting them.
 
+## Running the vector suite
+
+Fetch a dataset.
+The addresses, the sizes and the checksums are pinned in `vectors/dataset.go`, so two machines can prove they ran the same numbers:
+
+```sh
+bin/kura-vectors -dataset sift -out vecdata
+```
+
+`siftsmall` is five megabytes and is what continuous integration runs, `sift` is half a gigabyte and `gist` is four.
+For cosine or inner product the same command computes the ground truth and caches it next to the dataset, which is a full exact scan and is the slow part:
+
+```sh
+bin/kura-vectors -dataset sift -metric inner-product -out vecdata
+```
+
+Then run the engines:
+
+```sh
+bin/kura-vecbench -dataset sift -metric euclidean -data vecdata -bin bin -out results
+```
+
+This writes `results/vec-<engine>-<dataset>-<metric>-<host>.json` and `results/vector-report-<dataset>-<metric>-<host>.md`.
+The dataset and the metric are in the name because three runs of the same engines on one machine are three different measurements.
+
+Useful flags:
+
+- `-metric euclidean|cosine|inner-product` picks what nearest means, and an engine that cannot answer that question refuses the run instead of reporting a meaningless recall.
+- `-engines exact,hnsw` runs a subset.
+- `-k 10` is how many neighbours are asked for and the depth recall is scored at.
+- `-limit 100000` indexes part of the base set, which is how a shared machine gets a run that finishes. Recall then becomes a lower bound, because the ground truth still covers the whole set, and the report says so.
+- `-queries 1000` uses part of the query set.
+
 ## The query set
 
 `queries.txt` is grouped by intent, because the interesting thing is not the average, it is where the engines disagree.
@@ -141,6 +207,10 @@ The smoke run builds a corpus out of this repository's own checkout and runs eve
 It is a small corpus and the numbers from it are not worth publishing, but it exercises the corpus builder, every runner, both phases, the merge and the report.
 A harness that only ever ran on a developer's laptop is a harness that has silently stopped working.
 
+The vector suite gets the same treatment on siftsmall, under both Euclidean and inner product.
+That run asserts one figure rather than printing it: the exact scan has to score exactly one against the published ground truth, and the job fails if it does not.
+It is the only number in the suite with a known right answer, so it is the one worth checking on every pull request.
+
 ## Installing
 
 Every tagged release publishes archives for Linux, macOS and Windows on amd64 and arm64, deb, rpm and apk packages, and a container image on GHCR.
@@ -151,7 +221,8 @@ docker run --rm -v "$PWD:/bench" ghcr.io/tamnd/kura-bench:latest \
   -corpus /bench/corpus.jsonl -queries /bench/queries.txt -bin /usr/bin -out /bench/results
 ```
 
-The Tantivy runner is built per platform and attached to the release separately, because it has to be compiled for the target.
+The Rust runners are built per platform and attached to the release separately, because they have to be compiled for the target.
+That covers the text runners for Tantivy and SeekStorm and the vector runners for the exact scan, hnsw and turbovec.
 
 ## License
 

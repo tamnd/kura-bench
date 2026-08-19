@@ -1,0 +1,16 @@
+[package]
+name = "hnsw-vecrunner"
+description = "The hnsw_rs graph index, measured by kura-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+benchrs.workspace = true
+serde_json.workspace = true
+
+# Pinned exactly. The distances come with it, re-exported from anndists, so
+# there is one version of the crate and not two that happen to agree.
+hnsw_rs = "=0.3.4"
