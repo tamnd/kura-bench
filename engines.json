@@ -1,0 +1,54 @@
+{
+  "comment": [
+    "Every engine measured here, with the version it is pinned to.",
+    "A benchmark that says an engine is slow without saying which version it",
+    "measured is worth nothing, so the pin is written down here, checked into",
+    "the repository, and compared against the registry once a week by",
+    "cmd/kura-versions. When one of these goes stale the weekly run opens an",
+    "issue rather than quietly leaving the numbers describing last year."
+  ],
+  "engines": [
+    {
+      "name": "bleve",
+      "suite": "text",
+      "language": "go",
+      "registry": "gomod",
+      "package": "github.com/blevesearch/bleve/v2",
+      "source": "https://github.com/blevesearch/bleve"
+    },
+    {
+      "name": "sqlitefts",
+      "suite": "text",
+      "language": "go",
+      "registry": "gomod",
+      "package": "modernc.org/sqlite",
+      "source": "https://gitlab.com/cznic/sqlite",
+      "note": "SQLite FTS5 through the pure Go translation, so it runs with cgo off like everything else here."
+    },
+    {
+      "name": "tantivy",
+      "suite": "text",
+      "language": "rust",
+      "registry": "crate",
+      "package": "tantivy",
+      "source": "https://github.com/quickwit-oss/tantivy"
+    },
+    {
+      "name": "seekstorm",
+      "suite": "text",
+      "language": "rust",
+      "registry": "crate",
+      "package": "seekstorm",
+      "source": "https://github.com/SeekStorm/SeekStorm"
+    },
+    {
+      "name": "genba",
+      "suite": "text",
+      "language": "go",
+      "registry": "ours",
+      "package": "github.com/tamnd/genba",
+      "source": "https://github.com/tamnd/genba",
+      "note": "Ours. Pinned to a commit rather than a tag until there is a release to pin to."
+    }
+  ]
+}

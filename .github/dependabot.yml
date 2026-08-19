@@ -1,0 +1,52 @@
+# Dependabot keeps the toolchain and the harness dependencies moving.
+#
+# The engines themselves are also picked up here, and a bump to one of them is
+# not a routine merge: the committed results describe the versions that were
+# pinned when they were taken, so an engine bump means rerunning the benchmark
+# on the same hardware before the tables mean anything again. The engines
+# workflow says which pins have moved.
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    groups:
+      # Everything that is not an engine travels together, so the noise is one
+      # pull request a week rather than eight.
+      harness:
+        patterns:
+          - "golang.org/x/*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: /runners/rust
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies

@@ -1,0 +1,91 @@
+name: engines
+
+# Is every engine measured here still the version people are running.
+#
+# A benchmark goes stale quietly. The table stays in the README, the engines
+# keep releasing, and a year later the numbers describe software nobody has
+# installed. This runs once a week, compares every pin in engines.json against
+# its registry, and opens an issue when something has moved. It also runs on any
+# change to a manifest or a lock file, so a pull request that bumps an engine
+# says so in its own checks.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - engines.json
+      - go.mod
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - versions/**
+      - cmd/kura-versions/**
+  pull_request:
+    paths:
+      - engines.json
+      - go.mod
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - versions/**
+      - cmd/kura-versions/**
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engines-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      # The pins for the Rust engines are read out of the lock files, and a lock
+      # file is only complete once cargo has resolved the tree.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runners/rust
+      - name: resolve the Rust dependency tree
+        working-directory: runners/rust
+        run: cargo fetch --locked || cargo fetch
+
+      - name: compare every pin against its registry
+        id: check
+        run: |
+          go run ./cmd/kura-versions -markdown > versions.md || echo "behind=true" >> "$GITHUB_OUTPUT"
+          cat versions.md >> "$GITHUB_STEP_SUMMARY"
+          cat versions.md
+
+      # On a pull request the table in the step summary is the whole point and a
+      # stale pin is not a reason to block the change. On the weekly run it is,
+      # because nobody is looking at that summary.
+      - name: open an issue when something is behind
+        if: steps.check.outputs.behind == 'true' && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="An engine has fallen behind its latest release"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
+          body=$'One or more engines are pinned to something older than the current release.\nThe numbers in the results directory describe the pinned versions, so bumping a pin means rerunning the benchmark on the same hardware before the tables are updated.\n\n'"$(cat versions.md)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label engines
+          fi
+
+      - name: fail the weekly run when something is behind
+        if: steps.check.outputs.behind == 'true' && github.event_name == 'schedule'
+        run: exit 1
