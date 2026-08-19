@@ -213,9 +213,18 @@ func TestTheManifestInTheRepositoryParses(t *testing.T) {
 			if e.Package == "" {
 				t.Errorf("%s is in a registry but names no package", e.Name)
 			}
+		case "github":
+			if e.Package == "" {
+				t.Errorf("%s is in a registry but names no package", e.Name)
+			}
+			// A prebuilt library has no lock file, so the pin lives in the
+			// manifest and an entry without one has nothing to compare.
+			if e.Version == "" {
+				t.Errorf("%s is pinned to a github release but names no version", e.Name)
+			}
 		case "none":
 		default:
-			t.Errorf("%s has registry %q, want gomod, crate, ours or none", e.Name, e.Registry)
+			t.Errorf("%s has registry %q, want gomod, crate, github, ours or none", e.Name, e.Registry)
 		}
 		if seen[e.Name] {
 			t.Errorf("%s is in the manifest twice", e.Name)
@@ -236,4 +245,49 @@ func writeIn(t *testing.T, dir, name, body string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestItReadsTheLatestTagOffAGitHubRelease(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/LadybugDB/ladybug/releases/latest" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"tag_name":"v0.20.0","name":"Release 0.20.0"}`))
+	}))
+	defer srv.Close()
+
+	GitHubAPI = srv.URL
+	defer func() { GitHubAPI = "https://api.github.com" }()
+
+	m := Manifest{Engines: []Engine{{
+		Name:     "ladybug",
+		Registry: "github",
+		Package:  "LadybugDB/ladybug",
+		Version:  "v0.19.1",
+	}}}
+
+	got := Check(context.Background(), srv.Client(), m, Repo{})
+	if len(got) != 1 {
+		t.Fatalf("checked %d engines, want 1", len(got))
+	}
+	if got[0].Err != nil {
+		t.Fatal(got[0].Err)
+	}
+	if got[0].Pinned != "v0.19.1" || got[0].Latest != "v0.20.0" {
+		t.Fatalf("ladybug is %s against %s, want v0.19.1 against v0.20.0", got[0].Pinned, got[0].Latest)
+	}
+	if !got[0].Behind() {
+		t.Fatal("a pin one release back did not come back as behind")
+	}
+}
+
+// A github entry without a version has nothing to compare, and saying so is
+// better than reporting it as current every week.
+func TestAGitHubEntryWithoutAVersionIsAnError(t *testing.T) {
+	m := Manifest{Engines: []Engine{{Name: "ladybug", Registry: "github", Package: "LadybugDB/ladybug"}}}
+	got := Check(context.Background(), http.DefaultClient, m, Repo{})
+	if got[0].Err == nil {
+		t.Fatal("a github entry with no version came back without an error")
+	}
 }

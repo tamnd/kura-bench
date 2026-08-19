@@ -69,6 +69,16 @@ linters:
         linters:
           - noctx
           - prealloc
+      # The ladybug runner is cgo, and the linter reads the preprocessed file
+      # rather than the one on disk. Every finding it reports there is an
+      # artefact of that: import "C" reads as a duplicate of unsafe, and the
+      # offsets land mid token so an ordinary if err := f(); err != nil comes
+      # back as an unchecked error with a fragment of a string in the message.
+      # It is skipped rather than silenced case by case because none of the
+      # positions mean anything.
+      - path: runners/ladybug/
+        linters:
+          - gocritic
 
 formatters:
   enable:

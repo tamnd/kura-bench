@@ -96,6 +96,16 @@
       "note": "Two integer columns and a covering index on both, which is the design a lot of software already has and the floor a graph store has to beat."
     },
     {
+      "name": "ladybug",
+      "suite": "graph",
+      "language": "c++",
+      "registry": "github",
+      "package": "LadybugDB/ladybug",
+      "version": "v0.19.1",
+      "source": "https://github.com/LadybugDB/ladybug",
+      "note": "The only real graph database in the table. It is linked against the prebuilt shared library its releases publish rather than built from source, which is what makes it possible to measure it on every platform here. Its PageRank is in an extension that downloads at first use, so that row is left empty rather than filled with a number that measured the network."
+    },
+    {
       "name": "genba",
       "suite": "text",
       "language": "go",
