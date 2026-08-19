@@ -1,0 +1,137 @@
+{
+  "engine": "csr",
+  "version": "0.1.0",
+  "language": "rust",
+  "dataset": {
+    "name": "web-google",
+    "nodes": 875713,
+    "edges": 5105039,
+    "undirected": false,
+    "seeds": 1000
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 3.894552836,
+      "user_seconds": 3.1875139999999997,
+      "sys_seconds": 0.37243600000000004,
+      "peak_rss_bytes": 118452224,
+      "rss_bytes": 112603136,
+      "read_bytes": 0,
+      "write_bytes": 30928896
+    },
+    "bytes": 30928744,
+    "files": 1
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.064162021,
+      "user_seconds": 0.0030099999999999997,
+      "sys_seconds": 0.060577,
+      "peak_rss_bytes": 54702080,
+      "rss_bytes": 33439744,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 33439744
+  },
+  "query": {
+    "usage": {
+      "wall_seconds": 20.668651453,
+      "user_seconds": 26.387806,
+      "sys_seconds": 2.230621,
+      "peak_rss_bytes": 91688960,
+      "rss_bytes": 91799552,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "ops": [
+      {
+        "op": "neighbours",
+        "runs": 1000,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.00023099999999999998,
+        "median_ms": 0.0011719999999999999,
+        "p90_ms": 0.001863,
+        "p99_ms": 0.003656,
+        "max_ms": 0.050062,
+        "concurrent": {
+          "workers": 6,
+          "queries": 1000,
+          "seconds": 0.005101683,
+          "median_ms": 0.00087,
+          "p99_ms": 0.003467
+        }
+      },
+      {
+        "op": "two-hop",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.000981,
+        "median_ms": 0.023383,
+        "p90_ms": 0.160775,
+        "p99_ms": 0.25969600000000004,
+        "max_ms": 0.374096,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.040924138,
+          "median_ms": 0.357946,
+          "p99_ms": 22.970102999999998
+        }
+      },
+      {
+        "op": "shortest-path",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.005371,
+        "median_ms": 67.31371299999999,
+        "p90_ms": 261.873074,
+        "p99_ms": 530.757293,
+        "max_ms": 875.5526500000001,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 3.949678589,
+          "median_ms": 134.810873,
+          "p99_ms": 1246.420412
+        }
+      },
+      {
+        "op": "bfs",
+        "runs": 10,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.009487,
+        "median_ms": 216.037658,
+        "p90_ms": 322.577293,
+        "p99_ms": 436.445227,
+        "max_ms": 436.445227
+      },
+      {
+        "op": "pagerank",
+        "runs": 1,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 2978.588061,
+        "median_ms": 2978.588061,
+        "p90_ms": 2978.588061,
+        "p99_ms": 2978.588061,
+        "max_ms": 2978.588061
+      }
+    ]
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "x86_64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 9.53,
+    "memory_free_bytes": 6720471040,
+    "dedicated": false
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "engine": "petgraph",
+  "version": "0.8.3",
+  "language": "rust",
+  "dataset": {
+    "name": "web-google",
+    "nodes": 875713,
+    "edges": 5105039,
+    "undirected": false,
+    "seeds": 1000
+  },
+  "build": {
+    "usage": {
+      "wall_seconds": 4.233218444,
+      "user_seconds": 3.4107689999999997,
+      "sys_seconds": 0.5247459999999999,
+      "peak_rss_bytes": 173494272,
+      "rss_bytes": 173862912,
+      "read_bytes": 0,
+      "write_bytes": 40841216
+    },
+    "bytes": 40840328,
+    "files": 1
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 4.144272859,
+      "user_seconds": 3.6499110000000003,
+      "sys_seconds": 0.47449600000000003,
+      "peak_rss_bytes": 172711936,
+      "rss_bytes": 172843008,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 172843008
+  },
+  "query": {
+    "usage": {
+      "wall_seconds": 39.900238857,
+      "user_seconds": 43.701589,
+      "sys_seconds": 2.429327,
+      "peak_rss_bytes": 224903168,
+      "rss_bytes": 204316672,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "ops": [
+      {
+        "op": "neighbours",
+        "runs": 1000,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.000301,
+        "median_ms": 0.0012419999999999998,
+        "p90_ms": 0.006122,
+        "p99_ms": 0.010069,
+        "max_ms": 0.018484,
+        "concurrent": {
+          "workers": 6,
+          "queries": 1000,
+          "seconds": 0.01523764,
+          "median_ms": 0.0013620000000000001,
+          "p99_ms": 0.002814
+        }
+      },
+      {
+        "op": "two-hop",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.001162,
+        "median_ms": 0.051143999999999995,
+        "p90_ms": 0.734487,
+        "p99_ms": 1.923238,
+        "max_ms": 2.5584029999999998,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 0.6927324,
+          "median_ms": 0.28210799999999997,
+          "p99_ms": 583.9623819999999
+        }
+      },
+      {
+        "op": "shortest-path",
+        "runs": 100,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.006983,
+        "median_ms": 85.531212,
+        "p90_ms": 448.894753,
+        "p99_ms": 1280.120105,
+        "max_ms": 1379.547512,
+        "concurrent": {
+          "workers": 6,
+          "queries": 100,
+          "seconds": 7.86910099,
+          "median_ms": 262.473608,
+          "p99_ms": 1636.88187
+        }
+      },
+      {
+        "op": "bfs",
+        "runs": 10,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 0.008996,
+        "median_ms": 248.704634,
+        "p90_ms": 847.1199710000001,
+        "p99_ms": 850.470189,
+        "max_ms": 850.470189
+      },
+      {
+        "op": "pagerank",
+        "runs": 1,
+        "correct": 1,
+        "mismatches": 0,
+        "min_ms": 8044.928101,
+        "median_ms": 8044.928101,
+        "p90_ms": 8044.928101,
+        "p99_ms": 8044.928101,
+        "max_ms": 8044.928101
+      }
+    ]
+  },
+  "machine": {
+    "host": "vmi3112167",
+    "os": "linux",
+    "arch": "x86_64",
+    "cpu": "AMD EPYC Processor (with IBPB)",
+    "cores": 6,
+    "memory_bytes": 12541493248,
+    "load_before": 12.74,
+    "memory_free_bytes": 6739406848,
+    "dedicated": false
+  },
+  "notes": "petgraph is an in memory library with no on disk form, so the build phase writes the edges back out and the cold start is the graph being constructed again, so its open figure is a rebuild rather than a file being mapped"
+}
