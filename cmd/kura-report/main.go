@@ -92,7 +92,7 @@ func run(dir string) error {
 	written := 0
 	for key, rs := range text {
 		sortBy(rs, func(r bench.Result) string { return r.Engine })
-		body := textHeader(rs[0]) + bench.Report(rs)
+		body := textHeader(rs) + bench.Report(rs)
 		if err := write(dir, key, body, len(rs)); err != nil {
 			return err
 		}
@@ -124,15 +124,19 @@ func run(dir string) error {
 //
 // It is rebuilt from the results rather than from a command line, because the
 // command line that produced them is long gone and the corpus size, the machine
-// and the run count are all in the files.
-func textHeader(first bench.Result) string {
+// and the run count are all in the files. The run count comes from the first
+// engine that got as far as running the queries, and a run where none of them
+// did says nothing rather than saying zero.
+func textHeader(rs []bench.Result) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Results on %s\n\n", first.Machine.Host)
-	runs := 0
-	if len(first.Search.Queries) > 0 {
-		runs = first.Search.Queries[0].Runs
+	fmt.Fprintf(&b, "# Results on %s\n\n", rs[0].Machine.Host)
+	for _, r := range rs {
+		if len(r.Search.Queries) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "%d timed runs per query.\n\n", r.Search.Queries[0].Runs)
+		break
 	}
-	fmt.Fprintf(&b, "%d timed runs per query.\n\n", runs)
 	return b.String()
 }
 

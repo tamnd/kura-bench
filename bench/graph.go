@@ -7,8 +7,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 )
 
 // GraphResult is what a graph runner writes to standard output.
@@ -370,10 +368,8 @@ func writeCorrectness(b *strings.Builder, rs []GraphResult, ops []string) {
 		for _, name := range ops {
 			o, ok := r.Op(name)
 			switch {
-			case !ok && r.Incomplete != "":
-				b.WriteString(" ran out of time |")
 			case !ok:
-				b.WriteString(" not run |")
+				fmt.Fprintf(b, " %s |", missing(r.Incomplete))
 			case o.Unsupported != "":
 				b.WriteString(" cannot |")
 			case o.Mismatches == 0 && o.Runs > 0:
@@ -392,33 +388,43 @@ func writeCorrectness(b *strings.Builder, rs []GraphResult, ops []string) {
 }
 
 func writeGraphBuild(b *strings.Builder, rs []GraphResult) {
-	fmt.Fprintf(b, "## Loading the graph\n\n")
-	b.WriteString("| engine | wall | edges/s | CPU s | parallelism | peak RSS |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	var rows []string
 	for _, r := range rs {
 		if !r.built() {
 			continue
 		}
 		u := r.Build.Usage
-		fmt.Fprintf(b, "| %s | %s | %s | %.1f | %.1fx | %s |\n",
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s | %.1f | %.1fx | %s |",
 			r.Engine, secs(u.WallSeconds), count(int(r.EdgesPerSecond())),
-			u.CPUSeconds(), u.Parallelism(), mb(u.PeakRSSBytes))
+			u.CPUSeconds(), u.Parallelism(), mb(u.PeakRSSBytes)))
 	}
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "## Loading the graph\n\n")
+	b.WriteString("| engine | wall | edges/s | CPU s | parallelism | peak RSS |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	fmt.Fprintf(b, "%s\n", strings.Join(rows, "\n"))
 	b.WriteString("\nThis is the cost of getting a graph into the store in the first place, which on a large one is the largest number in this report.\n\n")
 }
 
 func writeGraphStorage(b *strings.Builder, rs []GraphResult) {
-	fmt.Fprintf(b, "## Storage\n\n")
-	b.WriteString("| engine | store on disk | files | bytes per edge | store over edge list |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	var rows []string
 	for _, r := range rs {
 		if !r.built() {
 			continue
 		}
-		fmt.Fprintf(b, "| %s | %s | %s | %.1f | %.2fx |\n",
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s | %.1f | %.2fx |",
 			r.Engine, mb(r.Build.Bytes), count(r.Build.Files),
-			r.BytesPerEdge(), r.StorageRatio())
+			r.BytesPerEdge(), r.StorageRatio()))
 	}
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "## Storage\n\n")
+	b.WriteString("| engine | store on disk | files | bytes per edge | store over edge list |\n")
+	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	fmt.Fprintf(b, "%s\n", strings.Join(rows, "\n"))
 	b.WriteString("\nBelow one means the store is keeping less than the eight bytes an edge arrived as, which is what a dense adjacency buys.\n")
 	b.WriteString("Above one is the cost of an index, a property store or a page layout, and it should be buying something back in the tables below.\n\n")
 }
@@ -435,11 +441,7 @@ func writeOps(b *strings.Builder, rs []GraphResult, ops []string) {
 		for _, r := range rs {
 			o, ok := r.Op(name)
 			if !ok {
-				what := "not run"
-				if r.Incomplete != "" {
-					what = "ran out of time"
-				}
-				fmt.Fprintf(b, "| %s | %s | | | | | | |\n", r.Engine, what)
+				fmt.Fprintf(b, "| %s | %s | | | | | | |\n", r.Engine, missing(r.Incomplete))
 				continue
 			}
 			if o.Unsupported != "" {
@@ -504,17 +506,7 @@ func opAbout(op string) string {
 func writeGraphNotes(b *strings.Builder, rs []GraphResult) {
 	var lines []string
 	for _, r := range rs {
-		note := r.Notes
-		if r.Incomplete != "" {
-			// In front of whatever the engine had to say about itself, because
-			// it is the first thing somebody looking for the missing numbers
-			// needs to read.
-			note = r.Incomplete + ", which is why its rows are empty rather than the engine being absent from the run."
-			if r.Notes != "" {
-				note += " " + upperFirst(r.Notes)
-			}
-		}
-		if note != "" {
+		if note := noteFor(r.Notes, r.Incomplete); note != "" {
 			lines = append(lines, fmt.Sprintf("- %s: %s", r.Engine, note))
 		}
 	}
@@ -525,32 +517,14 @@ func writeGraphNotes(b *strings.Builder, rs []GraphResult) {
 }
 
 // graphOpens borrows the text suite's cold start table, since opening a store
-// off disk is the same measurement whatever is in it.
+// off disk is the same measurement whatever is in it. The table drops the
+// engines that never opened anything.
 func graphOpens(rs []GraphResult) []Result {
-	out := make([]Result, 0, len(rs))
-	for _, r := range rs {
-		// An engine whose query process never got as far as answering has no
-		// cold start, and a row of zeros would read as the fastest open in the
-		// table.
-		if r.Open.Usage.WallSeconds <= 0 {
-			continue
-		}
-		out = append(out, Result{Engine: r.Engine, Open: r.Open})
+	out := make([]Result, len(rs))
+	for i, r := range rs {
+		out[i] = Result{Engine: r.Engine, Open: r.Open}
 	}
 	return out
-}
-
-// upperFirst starts a sentence.
-//
-// An engine's note is written as a clause that reads on from its own name, and
-// following the one sentence in this report that is not about the engine it
-// has to begin like a sentence.
-func upperFirst(s string) string {
-	r, n := utf8.DecodeRuneInString(s)
-	if n == 0 {
-		return s
-	}
-	return string(unicode.ToUpper(r)) + s[n:]
 }
 
 // built says the load phase produced a measurement, which is not the same as

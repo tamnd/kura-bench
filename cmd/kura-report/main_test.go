@@ -153,6 +153,28 @@ func TestAGraphNobodyPublishedGetsNoDescription(t *testing.T) {
 	}
 }
 
+// A run where every engine was cut off before it timed a query has no run
+// count, and a header that said zero would be stating a figure nobody measured.
+func TestARebuiltReportDoesNotInventARunCount(t *testing.T) {
+	dir := t.TempDir()
+	writeResult(t, dir, "sqlitefts-srv.json", bench.Result{
+		Engine:     "sqlitefts",
+		Machine:    bench.Machine{Host: "srv"},
+		Incomplete: "the query phase did not finish within 45m0s",
+	})
+
+	if err := run(dir); err != nil {
+		t.Fatal(err)
+	}
+	body := readReport(t, filepath.Join(dir, "report-srv.md"))
+	if strings.Contains(body, "timed runs per query") {
+		t.Errorf("the report states a run count nobody measured:\n%s", body)
+	}
+	if !strings.Contains(body, "the query phase did not finish within 45m0s") {
+		t.Errorf("the report does not say why the engine has no numbers:\n%s", body)
+	}
+}
+
 func TestAnEmptyDirectorySaysSo(t *testing.T) {
 	if err := run(t.TempDir()); err == nil {
 		t.Fatal("an empty directory came back without an error")

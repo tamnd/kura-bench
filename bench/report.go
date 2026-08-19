@@ -40,9 +40,21 @@ func Report(results []Result) string {
 	copy(sorted, results)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Engine < sorted[j].Engine })
 
+	// The machine and the corpus are read off the first result that measured
+	// them rather than off the first result. An engine that ran out of time
+	// while indexing is in the list with nothing but its name, and taking the
+	// corpus from it would blank the section that says what was measured.
+	head := sorted[0]
+	for _, r := range sorted {
+		if r.Corpus.Documents > 0 {
+			head = r
+			break
+		}
+	}
+
 	var b strings.Builder
-	writeMachine(&b, sorted[0].Machine)
-	writeCorpus(&b, sorted[0].Corpus)
+	writeMachine(&b, head.Machine)
+	writeCorpus(&b, head.Corpus)
 	writeIndexing(&b, sorted)
 	writeStorage(&b, sorted)
 	writeColdStart(&b, sorted)
@@ -81,40 +93,72 @@ func writeCorpus(b *strings.Builder, c CorpusStats) {
 }
 
 func writeIndexing(b *strings.Builder, rs []Result) {
+	var rows []string
+	for _, r := range rs {
+		if !r.indexed() {
+			continue
+		}
+		u := r.Index.Usage
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s | %s | %.1f | %.1f | %.1fx | %s |",
+			r.Engine, r.Version, secs(u.WallSeconds), count(int(r.DocsPerSecond())),
+			r.MBPerSecond(), u.CPUSeconds(), u.Parallelism(), mb(u.PeakRSSBytes)))
+	}
+	if len(rows) == 0 {
+		return
+	}
 	fmt.Fprintf(b, "## Indexing\n\n")
 	b.WriteString("| engine | version | wall | docs/s | MB/s | CPU s | parallelism | peak RSS |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- |\n")
-	for _, r := range rs {
-		u := r.Index.Usage
-		fmt.Fprintf(b, "| %s | %s | %s | %s | %.1f | %.1f | %.1fx | %s |\n",
-			r.Engine, r.Version, secs(u.WallSeconds), count(int(r.DocsPerSecond())),
-			r.MBPerSecond(), u.CPUSeconds(), u.Parallelism(), mb(u.PeakRSSBytes))
-	}
-	b.WriteString("\n")
+	fmt.Fprintf(b, "%s\n\n", strings.Join(rows, "\n"))
 }
 
 func writeStorage(b *strings.Builder, rs []Result) {
+	var rows []string
+	for _, r := range rs {
+		if !r.indexed() {
+			continue
+		}
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s | %.2fx | %s |",
+			r.Engine, mb(r.Index.Bytes), count(r.Index.Files),
+			r.IndexRatio(), mb(r.Index.Usage.WriteBytes)))
+	}
+	if len(rows) == 0 {
+		return
+	}
 	fmt.Fprintf(b, "## Storage\n\n")
 	b.WriteString("| engine | index on disk | files | index over corpus | bytes written |\n")
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
-	for _, r := range rs {
-		fmt.Fprintf(b, "| %s | %s | %s | %.2fx | %s |\n",
-			r.Engine, mb(r.Index.Bytes), count(r.Index.Files),
-			r.IndexRatio(), mb(r.Index.Usage.WriteBytes))
-	}
+	fmt.Fprintf(b, "%s\n", strings.Join(rows, "\n"))
 	b.WriteString("\nIndex over corpus below one means the engine does not keep the document text.\n")
 	b.WriteString("Bytes written is what the process asked the kernel to write, which on some platforms counts every handle and not only files.\n\n")
 }
 
+// writeColdStart is shared by all three suites, since opening an index off disk
+// is the same measurement whatever is in it.
+//
+// A heading with an empty table under it and a paragraph explaining numbers
+// that are not there is worse than no section, so a table nobody has a row in
+// is not written at all. The reason is in the notes, one line per engine.
 func writeColdStart(b *strings.Builder, rs []Result) {
+	var rows []string
+	for _, r := range rs {
+		// An engine whose query process never got as far as opening has no
+		// cold start, and a row of zeros would read as the fastest open in the
+		// table.
+		if r.Open.Usage.WallSeconds <= 0 {
+			continue
+		}
+		rows = append(rows, fmt.Sprintf("| %s | %s | %.2f | %s |",
+			r.Engine, secs(r.Open.Usage.WallSeconds),
+			r.Open.Usage.CPUSeconds(), mb(r.Open.ResidentBytes)))
+	}
+	if len(rows) == 0 {
+		return
+	}
 	fmt.Fprintf(b, "## Cold start\n\n")
 	b.WriteString("| engine | open and first query | CPU s | resident after open |\n")
 	b.WriteString("| --- | --- | --- | --- |\n")
-	for _, r := range rs {
-		fmt.Fprintf(b, "| %s | %s | %.2f | %s |\n",
-			r.Engine, secs(r.Open.Usage.WallSeconds),
-			r.Open.Usage.CPUSeconds(), mb(r.Open.ResidentBytes))
-	}
+	fmt.Fprintf(b, "%s\n", strings.Join(rows, "\n"))
 	b.WriteString("\nThis is a separate process from the one that built the index, so it is a real restart and not a reopen of a warm handle.\n\n")
 }
 
@@ -123,6 +167,12 @@ func writeSearch(b *strings.Builder, rs []Result) {
 	b.WriteString("| engine | median | p90 | p99 | CPU ms per query | peak RSS |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range rs {
+		// This is the table somebody comes to the report for, so the engine
+		// that has no numbers for it says so here rather than being absent.
+		if !r.searched() {
+			fmt.Fprintf(b, "| %s | %s | | | | |\n", r.Engine, missing(r.Incomplete))
+			continue
+		}
 		p90, p99 := aggregate(r)
 		fmt.Fprintf(b, "| %s | %s | %s | %s | %.1f | %s |\n",
 			r.Engine, ms(r.MedianQueryMS()), ms(p90), ms(p99),
@@ -145,6 +195,11 @@ func writeConcurrency(b *strings.Builder, rs []Result) {
 	b.WriteString("| engine | workers | queries/s | median | p99 |\n")
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
 	for _, r := range rs {
+		// An engine that never got to the query set has not declined to measure
+		// this, so it is left out rather than told apart from one that did.
+		if !r.searched() {
+			continue
+		}
 		c := r.Search.Concurrent
 		if c == nil {
 			fmt.Fprintf(b, "| %s | | not measured | | |\n", r.Engine)
@@ -170,6 +225,11 @@ func writeUpdates(b *strings.Builder, rs []Result) {
 	b.WriteString("| engine | documents | wall | docs/s | index after | growth |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range rs {
+		// Not supported and not reached are different things, and an engine
+		// whose query process was killed has said nothing about either.
+		if !r.searched() {
+			continue
+		}
 		u := r.Update
 		if u == nil {
 			fmt.Fprintf(b, "| %s | | not supported | | | |\n", r.Engine)
@@ -192,28 +252,33 @@ func writeUpdates(b *strings.Builder, rs []Result) {
 }
 
 func writePerQuery(b *strings.Builder, rs []Result) {
-	fmt.Fprintf(b, "## Per query\n\n")
-	b.WriteString("| query | engine | hits | median | p99 |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	var rows []string
 	for _, q := range queryOrder(rs) {
 		for _, r := range rs {
 			for _, s := range r.Search.Queries {
 				if s.Query != q {
 					continue
 				}
-				fmt.Fprintf(b, "| %s | %s | %s | %s | %s |\n",
-					q, r.Engine, count(s.Hits), ms(s.MedianMS), ms(s.P99MS))
+				rows = append(rows, fmt.Sprintf("| %s | %s | %s | %s | %s |",
+					q, r.Engine, count(s.Hits), ms(s.MedianMS), ms(s.P99MS)))
 			}
 		}
 	}
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "## Per query\n\n")
+	b.WriteString("| query | engine | hits | median | p99 |\n")
+	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	fmt.Fprintf(b, "%s\n", strings.Join(rows, "\n"))
 	b.WriteString("\nTwo engines that disagree about the hit count are not answering the same question, and their latencies are not comparable.\n\n")
 }
 
 func writeNotes(b *strings.Builder, rs []Result) {
 	var lines []string
 	for _, r := range rs {
-		if r.Notes != "" {
-			lines = append(lines, fmt.Sprintf("- %s: %s", r.Engine, r.Notes))
+		if note := noteFor(r.Notes, r.Incomplete); note != "" {
+			lines = append(lines, fmt.Sprintf("- %s: %s", r.Engine, note))
 		}
 	}
 	if len(lines) == 0 {
