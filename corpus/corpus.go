@@ -150,14 +150,18 @@ func writeRepo(dir, repo string, enc *json.Encoder) (Stats, error) {
 		if !d.Type().IsRegular() || !include(d.Name()) {
 			return nil
 		}
+		// A file that disappeared between the walk and the stat, or that cannot
+		// be read, is left out rather than failing the build. A corpus that
+		// only builds on the machine that unpacked the checkout is not much of
+		// a corpus.
 		info, err := d.Info()
 		if err != nil || info.Size() > MaxDocumentSize {
-			return nil
+			return nil //nolint:nilerr // an unreadable file is left out, not fatal
 		}
 
 		body, err := os.ReadFile(p)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // an unreadable file is left out, not fatal
 		}
 		// A file that is not valid UTF-8 is a binary that happens to have a text
 		// extension. Engines differ wildly in what they do with those, and none
@@ -168,7 +172,7 @@ func writeRepo(dir, repo string, enc *json.Encoder) (Stats, error) {
 
 		rel, err := filepath.Rel(dir, p)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // a path outside the root is left out, not fatal
 		}
 		rel = filepath.ToSlash(rel)
 

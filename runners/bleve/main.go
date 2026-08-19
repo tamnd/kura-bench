@@ -13,6 +13,7 @@ import (
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/mapping"
 	bquery "github.com/blevesearch/bleve/v2/search/query"
+
 	"github.com/tamnd/kura-bench/corpus"
 	"github.com/tamnd/kura-bench/runner"
 )

@@ -14,9 +14,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/tamnd/kura-bench/corpus"
 	"github.com/tamnd/kura-bench/runner"
-	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -49,7 +50,7 @@ func (e *engine) Create(dir string) error {
 	// The unindexed columns are metadata a result list shows and nobody
 	// searches. Marking them so keeps them out of the term index, which is what
 	// a schema written by someone who had read the manual would do.
-	_, err = db.Exec(`
+	_, err = db.ExecContext(context.Background(), `
 		CREATE VIRTUAL TABLE docs USING fts5(
 			id UNINDEXED,
 			repo UNINDEXED,
@@ -76,20 +77,25 @@ func (e *engine) Open(dir string) error {
 }
 
 func (e *engine) AddBatch(docs []corpus.Document) error {
-	tx, err := e.db.Begin()
+	// The harness owns the deadline for a phase, and the indexing phase has
+	// none, so this is the one place a background context is the right answer.
+	ctx := context.Background()
+
+	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.Prepare(`INSERT INTO docs(id, repo, path, title, body, ext) VALUES(?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.PrepareContext(ctx,
+		`INSERT INTO docs(id, repo, path, title, body, ext) VALUES(?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = stmt.Close() }()
 
 	for _, d := range docs {
-		if _, err := stmt.Exec(d.ID, d.Repo, d.Path, d.Title, d.Body, d.Extension); err != nil {
+		if _, err := stmt.ExecContext(ctx, d.ID, d.Repo, d.Path, d.Title, d.Body, d.Extension); err != nil {
 			return err
 		}
 	}
@@ -100,10 +106,11 @@ func (e *engine) Flush() error {
 	// Merging the b-tree levels is the part of the work FTS5 would otherwise do
 	// during the first queries, and leaving it out here would move indexing
 	// time into the search numbers.
-	if _, err := e.db.Exec(`INSERT INTO docs(docs) VALUES('optimize')`); err != nil {
+	ctx := context.Background()
+	if _, err := e.db.ExecContext(ctx, `INSERT INTO docs(docs) VALUES('optimize')`); err != nil {
 		return err
 	}
-	_, err := e.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	_, err := e.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
 	return err
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/tamnd/genba/index"
 	"github.com/tamnd/genba/store"
 	"github.com/tamnd/genba/store/memstore"
+
 	"github.com/tamnd/kura-bench/corpus"
 	"github.com/tamnd/kura-bench/runner"
 )

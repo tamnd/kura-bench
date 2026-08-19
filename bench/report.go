@@ -127,13 +127,13 @@ func writeSearch(b *strings.Builder, rs []Result) {
 }
 
 func writeConcurrency(b *strings.Builder, rs []Result) {
-	any := false
+	measured := false
 	for _, r := range rs {
 		if r.Search.Concurrent != nil {
-			any = true
+			measured = true
 		}
 	}
-	if !any {
+	if !measured {
 		return
 	}
 	fmt.Fprintf(b, "## Search, several in flight\n\n")
@@ -152,13 +152,13 @@ func writeConcurrency(b *strings.Builder, rs []Result) {
 }
 
 func writeUpdates(b *strings.Builder, rs []Result) {
-	any := false
+	measured := false
 	for _, r := range rs {
 		if r.Update != nil {
-			any = true
+			measured = true
 		}
 	}
-	if !any {
+	if !measured {
 		return
 	}
 	fmt.Fprintf(b, "## Incremental update\n\n")

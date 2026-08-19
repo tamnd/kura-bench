@@ -79,10 +79,10 @@ fn cpu_model() -> String {
         return String::new();
     };
     for line in text.lines() {
-        if let Some(rest) = line.strip_prefix("model name") {
-            if let Some((_, v)) = rest.split_once(':') {
-                return v.trim().to_string();
-            }
+        if let Some(rest) = line.strip_prefix("model name")
+            && let Some((_, v)) = rest.split_once(':')
+        {
+            return v.trim().to_string();
         }
     }
     String::new()
@@ -172,10 +172,11 @@ fn cpu_model() -> String {
 #[cfg(windows)]
 fn memory_totals() -> (i64, i64) {
     use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-    let mut s = MEMORYSTATUSEX {
-        dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
-        ..Default::default()
-    };
+    // The windows-sys structs are plain repr(C) declarations with no Default,
+    // and the API contract for all of them is a zeroed struct with the size
+    // field filled in.
+    let mut s: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+    s.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
     let ok = unsafe { GlobalMemoryStatusEx(&mut s) };
     if ok == 0 {
         return (0, 0);

@@ -12,6 +12,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -171,7 +172,10 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
 	}
 
 	var stdout bytes.Buffer
-	cmd := exec.Command(r.path, args...)
+	// No deadline on purpose. An index phase over a real corpus takes as long
+	// as it takes, and a timeout here would turn a slow engine into a missing
+	// row instead of a slow number.
+	cmd := exec.CommandContext(context.Background(), r.path, args...)
 	cmd.Stdout = &stdout
 	// The runner's progress goes straight through, because these phases take
 	// minutes and a run that prints nothing for that long looks hung.

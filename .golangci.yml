@@ -53,6 +53,10 @@ linters:
         # minutes.
         - hugeParam
         - rangeValCopy
+        # A size and a count returned together read fine as (int64, int, error)
+        # and naming them only to satisfy a linter puts the names in the
+        # signature and shadows in the body.
+        - unnamedResult
 
   exclusions:
     generated: lax

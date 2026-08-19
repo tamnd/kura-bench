@@ -152,10 +152,13 @@ mod platform {
     };
 
     pub fn cpu_time() -> (f64, f64) {
-        let mut creation = FILETIME::default();
-        let mut exit = FILETIME::default();
-        let mut kernel = FILETIME::default();
-        let mut user = FILETIME::default();
+        // windows-sys declares these as plain repr(C) structs with no Default,
+        // and every one of them is an out parameter the call fills in, so a
+        // zeroed struct is what the API asks for.
+        let mut creation: FILETIME = unsafe { std::mem::zeroed() };
+        let mut exit: FILETIME = unsafe { std::mem::zeroed() };
+        let mut kernel: FILETIME = unsafe { std::mem::zeroed() };
+        let mut user: FILETIME = unsafe { std::mem::zeroed() };
         let ok = unsafe {
             GetProcessTimes(
                 GetCurrentProcess(),
@@ -178,7 +181,7 @@ mod platform {
     }
 
     pub fn memory() -> (i64, i64) {
-        let mut c = PROCESS_MEMORY_COUNTERS::default();
+        let mut c: PROCESS_MEMORY_COUNTERS = unsafe { std::mem::zeroed() };
         c.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
         let ok = unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb) };
         if ok == 0 {
@@ -188,7 +191,7 @@ mod platform {
     }
 
     pub fn io_bytes() -> (i64, i64) {
-        let mut c = IO_COUNTERS::default();
+        let mut c: IO_COUNTERS = unsafe { std::mem::zeroed() };
         let ok = unsafe { GetProcessIoCounters(GetCurrentProcess(), &mut c) };
         if ok == 0 {
             return (0, 0);
