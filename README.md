@@ -144,20 +144,25 @@ make build
 That builds all three orchestrators, the corpus builder, the two dataset fetchers and every runner into `bin/`.
 The Rust runners are skipped with a message if there is no cargo on the machine, and the report says which engines ran.
 
-Build a corpus from checkouts you name:
+Build the corpus:
+
+```sh
+bin/kura-corpus -src ~/corpus-src -out corpus.jsonl
+```
+
+That fetches six released projects at the commits pinned in `corpus/sources.go` and writes one JSON lines file from them.
+The projects are Go, Kubernetes, Rust, PostgreSQL, Redis and Lucene, chosen for spread rather than for size: two large Go trees with a lot of generated code, a very large number of very small Rust test files, two C trees with long comment blocks that read like prose, and the source of a search engine.
+The commit is pinned rather than the branch because a corpus is only a measuring instrument if it is the same instrument on every machine, and the main branch of six projects is a different set of files every day.
+Each one is a shallow fetch of a single commit, the checkout is verified against the pin afterwards, and a checkout already sitting on the right commit is left alone, so running it again is cheap.
+
+Building it is the slowest step in the repository and it only has to happen once per machine.
+
+For trying something out there are two other forms, which do not produce a comparable result and are not meant to:
 
 ```sh
 bin/kura-corpus -repo linux=/src/linux -repo llvm=/src/llvm-project -out corpus.jsonl
-```
-
-Or from a directory that holds one checkout per subdirectory:
-
-```sh
 bin/kura-corpus -root ~/corpus -out corpus.jsonl
 ```
-
-The named form is the one to use for a result anybody else is going to read, because a corpus that means the same thing on four machines has to be built from the same named projects.
-Building it is the slowest step in the repository and it only has to happen once per machine.
 
 Then run everything:
 
