@@ -1,13 +1,13 @@
 # kura-bench
 
-A benchmark suite for search engines, built to produce numbers that survive being argued with.
+A benchmark suite for search, vector and graph engines, built to produce numbers that survive being argued with.
 
-Every engine here indexes the same data in the same order, is searched with the same queries, and is measured by the operating system rather than by its own stopwatch.
+Every engine here loads the same data in the same order, is asked the same questions, and is measured by the operating system rather than by its own stopwatch.
 Nothing is simulated and nothing is generated.
-The corpus is real source trees, the vectors are the published SIFT and GIST descriptors with the ground truth that came with them, the queries are the sort of thing people actually type, and every figure in a report came from a process that really did the work.
+The corpus is real source trees, the vectors are the published SIFT and GIST descriptors with the ground truth that came with them, the graphs are the SNAP collaboration and web crawl networks, the queries are the sort of thing people actually type, and every figure in a report came from a process that really did the work.
 
-There are two suites.
-`kura-bench` measures full text engines and `kura-vecbench` measures vector indexes.
+There are three suites.
+`kura-bench` measures full text engines, `kura-vecbench` measures vector indexes and `kura-graphbench` measures graph stores.
 They share the machine description, the process counters and the report writer, because two engines timed by two pieces of code are not being compared to each other.
 
 ## Why it exists
@@ -63,6 +63,24 @@ A quantizing index built for maximum inner product, scored against Euclidean gro
 It is not a bad index, it is answering a different question.
 Every runner is told which metric the run is under and refuses the run if it cannot answer that one, so a mismatch is an error rather than a number.
 
+## What is measured, in the graph suite
+
+Everything the other two measure that still applies: load time and its parallelism, store size on disk against the size of the raw edge list, cold start in a second process, per operation latency, and throughput with several in flight.
+
+What is different is that a graph store does not do one thing, it does five, and they have almost nothing in common.
+A neighbour lookup is a single row read.
+A two hop lookup is where the cost of a hub shows up.
+A shortest path between two nodes that are not connected costs a full traversal of everything the start can reach.
+A breadth first search touches everything and no index can help it.
+PageRank walks every edge twenty times over and is an analytics job rather than a serving one.
+So there is a table per operation rather than one number per engine, and a store that is quick at the first and hopeless at the last is visible as exactly that.
+
+Correctness is checked the way recall is checked in the vector suite.
+The answers are worked out once, in Go, by walking the same edge list the plainest way there is, and every runner is a separate implementation in another language.
+Two independent implementations agreeing is real evidence, and one implementation agreeing with itself is not.
+Every operation reduces to a list of whole numbers so a disagreement is a comparison rather than a schema.
+A store that dropped half the edges answers every question faster than one that did not, and no timing column would ever say so, which is why the correctness table comes before the timings and why continuous integration fails on a disagreement instead of printing one.
+
 ## Engines
 
 Text:
@@ -83,10 +101,18 @@ Vector:
 | hnsw | Rust | euclidean, cosine | The graph index, at the connection and construction settings hnswlib has defaulted to for years |
 | turbovec | Rust | inner product | A quantizing index, one index per bit width because the width is fixed when it is built |
 
-Each engine is a separate binary that speaks a small contract: create, add a batch, flush, open, search, close.
+Graph:
+
+| Engine | Language | What it is |
+| --- | --- | --- |
+| csr | Rust | A compressed sparse row adjacency and nothing else, the layout everything else is trying to beat |
+| petgraph | Rust | The library a Rust program reaches for, driven through its adjacency rather than its algorithm module |
+| sqlite | Go | Two integer columns and a covering index, the design a lot of software already has |
+
+Each engine is a separate binary that speaks a small contract: create, load, flush, open, ask, close.
 Adding one is a hundred lines and does not touch the harness.
 The Go runners live under `runners/`, one directory each, and the Rust runners share a cargo workspace at `runners/rust` so that the same measuring code times all of them.
-A text runner is called `<engine>-runner` and a vector runner `<engine>-vecrunner`, both built into `bin/`, and each suite only ever picks up its own.
+A text runner is called `<engine>-runner`, a vector runner `<engine>-vecrunner` and a graph runner `<engine>-graphrunner`, all built into `bin/`, and each suite only ever picks up its own.
 
 Every engine is pinned to a version and `kura-versions` compares each pin against its registry.
 A workflow runs it every Monday and opens an issue when something has fallen behind, because a benchmark against a two year old release is a benchmark against nothing.
@@ -115,7 +141,7 @@ Every engine stores the document body, so the index size comparison is like for 
 make build
 ```
 
-That builds both orchestrators, the corpus builder, the dataset fetcher and every runner into `bin/`.
+That builds all three orchestrators, the corpus builder, the two dataset fetchers and every runner into `bin/`.
 The Rust runners are skipped with a message if there is no cargo on the machine, and the report says which engines ran.
 
 Build a corpus from checkouts you name:
@@ -183,6 +209,48 @@ Useful flags:
 - `-limit 100000` indexes part of the base set, which is how a shared machine gets a run that finishes. Recall then becomes a lower bound, because the ground truth still covers the whole set, and the report says so.
 - `-queries 1000` uses part of the query set.
 
+## Running the graph suite
+
+Fetch a graph.
+The addresses, the node and edge counts and the checksums are pinned in `graphs/dataset.go`, and the fetcher checks its own parse against the counts the publisher printed before it writes anything:
+
+```sh
+bin/kura-graphs -dataset ca-grqc -out graphdata
+```
+
+The same command works out the answers every runner is scored against and writes them next to the edges.
+`ca-grqc` is 29 thousand edges and is what continuous integration runs, `web-google` is 5 million and `soc-livejournal` is 69 million.
+Working out the answers on the large two takes a while and it only has to happen once per machine.
+
+A machine that cannot hold the whole of a large graph prepares a smaller one instead of loading part of a big one:
+
+```sh
+bin/kura-graphs -dataset soc-livejournal -nodes 500000 -out graphdata
+```
+
+That keeps the 500 thousand lowest identifiers and every edge with both ends among them, writes it to `graphdata/soc-livejournal-n500000`, and works out that graph's own answers.
+The text and vector suites have a `-limit` for this and the graph suite does not, because the two situations are not the same.
+Indexing half a corpus still answers a query correctly about the half it has, and recall against the full ground truth is then a lower bound worth reading.
+Cutting an edge list in half instead leaves nodes that have lost most of their neighbours, so every traversal answer is wrong by an amount nothing can measure, and a correctness column on it would be reporting noise.
+A subgraph is a real graph, so the answers are the right answers and the numbers mean what they say.
+What it is not is a sample of the original, and the report is labelled with the subgraph's name so that a result on it is never mistaken for a result on the whole thing.
+
+Then run the engines:
+
+```sh
+bin/kura-graphbench -dataset ca-grqc -data graphdata -bin bin -out results
+```
+
+This writes `results/graph-<engine>-<dataset>-<host>.json` and `results/graph-report-<dataset>-<host>.md`.
+
+Useful flags:
+
+- `-engines csr,sqlite` runs a subset.
+- `-ops neighbours,bfs` runs a subset of the operations, in report order whatever order they are given in.
+- `-graph graphdata/soc-livejournal-n500000` runs against a prepared directory rather than a named dataset, which is how a subgraph is measured.
+- `-workers 16` sets the concurrency for the several-in-flight phase, the default is the core count.
+- `-keep` leaves the built stores in place instead of deleting them.
+
 ## The query set
 
 `queries.txt` is grouped by intent, because the interesting thing is not the average, it is where the engines disagree.
@@ -211,10 +279,14 @@ The vector suite gets the same treatment on siftsmall, under both Euclidean and 
 That run asserts one figure rather than printing it: the exact scan has to score exactly one against the published ground truth, and the job fails if it does not.
 It is the only number in the suite with a known right answer, so it is the one worth checking on every pull request.
 
+The graph suite gets the same treatment on ca-GrQc.
+That run fetches the graph, works out the answers, runs every engine and then fails if any of them disagrees with the reference on any operation.
+Three implementations across two languages landing on the same numbers is the check, and a run where they do not is a bug report rather than a benchmark.
+
 ## Installing
 
 Every tagged release publishes archives for Linux, macOS and Windows on amd64 and arm64, deb, rpm and apk packages, and a container image on GHCR.
-The archive contains the orchestrator, the corpus builder, every Go runner and the query set, so unpacking it on a machine is the whole setup.
+The archive contains all three orchestrators, the corpus builder, the two dataset fetchers, every Go runner and the query set, so unpacking it on a machine is the whole setup.
 
 ```sh
 docker run --rm -v "$PWD:/bench" ghcr.io/tamnd/kura-bench:latest \
@@ -222,7 +294,7 @@ docker run --rm -v "$PWD:/bench" ghcr.io/tamnd/kura-bench:latest \
 ```
 
 The Rust runners are built per platform and attached to the release separately, because they have to be compiled for the target.
-That covers the text runners for Tantivy and SeekStorm and the vector runners for the exact scan, hnsw and turbovec.
+That covers the text runners for Tantivy and SeekStorm, the vector runners for the exact scan, hnsw and turbovec, and the graph runners for the sparse row adjacency and petgraph.
 
 ## License
 

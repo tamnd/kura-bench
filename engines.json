@@ -69,6 +69,33 @@
       "note": "The brute force scan. It has no library behind it, so there is no version to fall behind, and it is what every approximate index in the vector table is measured against."
     },
     {
+      "name": "csr",
+      "suite": "graph",
+      "language": "rust",
+      "registry": "none",
+      "package": "",
+      "source": "https://github.com/tamnd/kura-bench",
+      "note": "A compressed sparse row adjacency and nothing else. It has no library behind it, so there is no version to fall behind, and it is the layout every other graph store in the table is trying to beat."
+    },
+    {
+      "name": "petgraph",
+      "suite": "graph",
+      "language": "rust",
+      "registry": "crate",
+      "package": "petgraph",
+      "source": "https://github.com/petgraph/petgraph",
+      "note": "The operations are written against its adjacency rather than its algorithm module, because those algorithms make different definitional choices and two engines answering different questions cannot be compared."
+    },
+    {
+      "name": "sqlite",
+      "suite": "graph",
+      "language": "go",
+      "registry": "gomod",
+      "package": "modernc.org/sqlite",
+      "source": "https://gitlab.com/cznic/sqlite",
+      "note": "Two integer columns and a covering index on both, which is the design a lot of software already has and the floor a graph store has to beat."
+    },
+    {
       "name": "genba",
       "suite": "text",
       "language": "go",

@@ -53,6 +53,58 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     targets: *targets
 
+  # The vector suite: the dataset fetcher, which also computes and caches the
+  # ground truth for a metric its publisher did not ship, and its orchestrator.
+  - id: kura-vectors
+    binary: kura-vectors
+    main: ./cmd/kura-vectors
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
+  - id: kura-vecbench
+    binary: kura-vecbench
+    main: ./cmd/kura-vecbench
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
+  # The graph suite: the fetcher, which also works out the answers every runner
+  # is checked against, and its orchestrator.
+  - id: kura-graphs
+    binary: kura-graphs
+    main: ./cmd/kura-graphs
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
+  - id: kura-graphbench
+    binary: kura-graphbench
+    main: ./cmd/kura-graphbench
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
   # The engines. Each one is its own process so that the open phase is a real
   # cold start and so that one engine crashing does not take the run with it.
   #
@@ -94,21 +146,42 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     targets: *targets
 
+  # The graph suite's Go runner. It is named for the engine rather than for the
+  # directory, because the name in the report is the name of the thing being
+  # measured.
+  - id: sqlite-graphrunner
+    binary: sqlite-graphrunner
+    main: ./runners/sqlitegraph
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets: *targets
+
 archives:
-  # One archive with the orchestrator, the corpus builder and every Go runner in
-  # it, plus the query set. Unpack it on a machine and there is nothing else to
-  # fetch before a run.
+  # One archive with all three orchestrators, the fetchers and every Go runner
+  # in it, plus the query set. Unpack it on a machine and there is nothing else
+  # to fetch before a run.
   #
-  # The Tantivy runner is not in here. It needs a Rust toolchain to build for the
-  # target and shipping a stale one would be worse than shipping none, so a run
-  # that includes it is built from source with `make build`.
+  # The Rust runners are not in here. They need a Rust toolchain to build for the
+  # target and shipping a stale one would be worse than shipping none, so they
+  # are attached to the release separately and a run that includes them can also
+  # be built from source with `make build`.
   - id: default
     ids:
       - kura-bench
       - kura-corpus
+      - kura-vectors
+      - kura-vecbench
+      - kura-graphs
+      - kura-graphbench
       - bleve-runner
       - sqlitefts-runner
       - genba-runner
+      - sqlite-graphrunner
     name_template: "kura-bench_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
@@ -124,14 +197,19 @@ nfpms:
     ids:
       - kura-bench
       - kura-corpus
+      - kura-vectors
+      - kura-vecbench
+      - kura-graphs
+      - kura-graphbench
       - bleve-runner
       - sqlitefts-runner
       - genba-runner
+      - sqlite-graphrunner
     file_name_template: "{{ .ConventionalFileName }}"
     vendor: tamnd
     homepage: https://github.com/tamnd/kura-bench
     maintainer: Duc-Tam Nguyen <tamnd87@gmail.com>
-    description: Search engine benchmark suite, real corpora and real numbers for indexing, search, memory, disk and CPU.
+    description: Search, vector and graph benchmark suite, real datasets and real numbers for ingest, query, memory, disk and CPU.
     license: MIT
     formats:
       - deb
@@ -157,7 +235,7 @@ dockers_v2:
       - linux/arm64
     labels:
       org.opencontainers.image.title: "{{ .ProjectName }}"
-      org.opencontainers.image.description: "Search engine benchmark suite"
+      org.opencontainers.image.description: "Search, vector and graph benchmark suite"
       org.opencontainers.image.url: "https://github.com/tamnd/kura-bench"
       org.opencontainers.image.source: "https://github.com/tamnd/kura-bench"
       org.opencontainers.image.version: "{{ .Version }}"
@@ -174,7 +252,7 @@ homebrew_casks:
       token: '{{ envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}'
     directory: Casks
     homepage: https://github.com/tamnd/kura-bench
-    description: Search engine benchmark suite
+    description: Search, vector and graph benchmark suite
     skip_upload: '{{ if envOrDefault "HOMEBREW_TAP_GITHUB_TOKEN" "" }}false{{ else }}true{{ end }}'
     commit_author:
       name: Duc-Tam Nguyen
@@ -188,7 +266,7 @@ scoops:
       name: scoop-bucket
       token: '{{ envOrDefault "SCOOP_BUCKET_GITHUB_TOKEN" "" }}'
     homepage: https://github.com/tamnd/kura-bench
-    description: Search engine benchmark suite
+    description: Search, vector and graph benchmark suite
     license: MIT
     skip_upload: '{{ if envOrDefault "SCOOP_BUCKET_GITHUB_TOKEN" "" }}false{{ else }}true{{ end }}'
     commit_author:

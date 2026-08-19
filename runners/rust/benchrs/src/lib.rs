@@ -11,6 +11,7 @@
 
 pub mod config;
 pub mod corpus;
+pub mod graph;
 pub mod machine;
 pub mod result;
 pub mod usage;
