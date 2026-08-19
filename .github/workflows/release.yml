@@ -90,7 +90,8 @@ jobs:
   # built for the target, so they are built here for the three platforms a
   # benchmark run happens on and attached to the release. Somebody measuring
   # Tantivy or SeekStorm on a machine without a Rust toolchain can take the
-  # binary from the release page, and the same goes for the vector runners.
+  # binary from the release page, and the same goes for the vector and graph
+  # runners.
   rust-runners:
     if: github.ref_type == 'tag'
     strategy:
@@ -116,11 +117,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          # The two suites are kept apart by the suffix, the way they are in
-          # bin/, because kura-bench and kura-vecbench each pick up their own
-          # and neither should ever try to run the other's.
+          # The three suites are kept apart by the suffix, the way they are in
+          # bin/, because kura-bench, kura-vecbench and kura-graphbench each
+          # pick up their own and none should ever run another's.
           for r in tantivy-runner seekstorm-runner \
-                   exact-vecrunner turbovec-vecrunner hnsw-vecrunner; do
+                   exact-vecrunner turbovec-vecrunner hnsw-vecrunner \
+                   csr-graphrunner petgraph-graphrunner; do
             cp "runners/rust/target/release/$r${{ matrix.ext }}" \
               "out/${r}_${{ github.ref_name }}_${{ matrix.name }}${{ matrix.ext }}"
           done
