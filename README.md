@@ -396,6 +396,11 @@ Some engines have no on disk form.
 The genba runner today uses an in memory store, so its open phase is a full reindex from the corpus.
 That is the honest cold start for an in memory store rather than a favour done to it, and it is written down in the result notes rather than left for somebody to work out.
 
+Each result carries a `run` block holding the SHA-256 of the corpus and of the query file, the commit the orchestrator was built from, when the run started, and every parameter it was given.
+The point is that somebody who wants to argue with a number can start from the same bytes and the same code rather than from something that happens to have the same name.
+Two files whose corpus digests differ are not a comparison no matter how similar the tables look, and the commit is read out of the build information rather than by asking git, because the binary that produced the numbers is the fact worth recording and the checkout beside it may have moved on.
+A binary built from a modified tree says so, since a run from an uncommitted tree cannot be reproduced from the commit alone.
+
 ## Continuous integration
 
 Every pull request builds and tests on Linux and macOS with the race detector on, cross compiles for Windows, Linux arm64 and macOS arm64, builds and clippies the Rust crate on all three platforms, and then does a real end to end run.

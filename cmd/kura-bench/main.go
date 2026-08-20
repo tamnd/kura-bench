@@ -105,6 +105,19 @@ func run(cfg config) error {
 		}
 	}
 
+	// Once, before anything runs, because it digests the corpus and there is no
+	// sense doing that five times over the same file. Every result gets a copy,
+	// so each file stands on its own rather than only meaning something next to
+	// the report it was written beside.
+	run := bench.Run{
+		Corpus:  cfg.corpus,
+		Queries: cfg.queries,
+		Repeat:  cfg.repeat,
+		Workers: cfg.workers,
+		Depth:   cfg.depth,
+		Limit:   cfg.limit,
+	}.Describe()
+
 	var results []bench.Result
 	for _, r := range runners {
 		fmt.Fprintf(os.Stderr, "\n== %s\n", r.name)
@@ -119,6 +132,7 @@ func run(cfg config) error {
 		if res.Incomplete != "" {
 			fmt.Fprintf(os.Stderr, "%s: %s, keeping what it did measure\n", r.name, res.Incomplete)
 		}
+		res.Run = &run
 		results = append(results, res)
 
 		name := filepath.Join(cfg.out, r.name+"-"+hostSlug(res.Machine.Host)+".json")
@@ -347,6 +361,26 @@ func header(cfg config, first bench.Result) string {
 		fmt.Fprintf(&b, ", limited to %d documents", cfg.limit)
 	}
 	b.WriteString(".\n\n")
+
+	// The checksums and the commit, so that somebody who wants to argue with
+	// one of these numbers can start from the same bytes and the same code
+	// rather than from something that has the same name.
+	if r := first.Run; r != nil {
+		fmt.Fprintf(&b, "Run started %s.\n", r.Started.Format(time.RFC3339))
+		if r.CorpusSHA256 != "" {
+			fmt.Fprintf(&b, "Corpus sha256 %s, %d bytes.\n", r.CorpusSHA256, r.CorpusBytes)
+		}
+		if r.QueriesSHA256 != "" {
+			fmt.Fprintf(&b, "Queries sha256 %s.\n", r.QueriesSHA256)
+		}
+		switch {
+		case r.Commit != "" && r.Modified:
+			fmt.Fprintf(&b, "Built from %s with uncommitted changes, so this run is not reproducible from the commit alone.\n", r.Commit)
+		case r.Commit != "":
+			fmt.Fprintf(&b, "Built from %s.\n", r.Commit)
+		}
+		b.WriteString("\n")
+	}
 	return b.String()
 }
 

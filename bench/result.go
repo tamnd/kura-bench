@@ -94,6 +94,11 @@ type Result struct {
 	// nobody can compare against anything.
 	Machine Machine `json:"machine"`
 
+	// Run is the input and the code that produced these numbers. It is filled
+	// in by the orchestrator after the runner has written its result, so it is
+	// absent from the output of a runner invoked by hand.
+	Run *Run `json:"run,omitempty"`
+
 	// Notes is for anything that would otherwise make a number misleading, such
 	// as an engine that could not express one of the filters, or a phase that
 	// was skipped and why.
