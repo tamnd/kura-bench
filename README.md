@@ -220,7 +220,7 @@ The JSON is the record, the markdown is what a person reads.
 
 Useful flags:
 
-- `-engines bleve,genba` runs a subset instead of everything found in `-bin`.
+- `-engines bleve,genba` runs a subset instead of everything found in `-bin`, in the order it names them, so an engine that takes hours to index can be put last instead of holding up the results you are actually waiting on. Without the flag the order is alphabetical. Naming an engine that has no runner fails immediately rather than after the rest of the run.
 - `-limit 200000` stops after that many documents, which is how a shared machine gets a run that finishes.
 - `-repeat 50` runs each query that many times, the default is twenty.
 - `-workers 16` sets the concurrency for the several-in-flight phase, the default is the core count.

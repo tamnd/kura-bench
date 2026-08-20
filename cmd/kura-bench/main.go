@@ -275,18 +275,20 @@ type runnerBin struct {
 // engine written in another language joins the comparison without anything here
 // knowing about it. The corpus builder and the orchestrator live in the same
 // directory and are skipped by the same rule.
+//
+// When -engines names them, they run in the order it names them. On a real
+// corpus one engine's index phase can take hours, and having that decided by
+// where its name falls in the alphabet means a slow engine holds up every
+// result behind it. Without the flag the order is the directory's, which is
+// alphabetical and has to be something.
 func discover(cfg config) ([]runnerBin, error) {
 	entries, err := os.ReadDir(cfg.binDir)
 	if err != nil {
 		return nil, fmt.Errorf("%w, run make build first", err)
 	}
 
-	want := map[string]bool{}
-	for _, e := range cfg.engines {
-		want[strings.TrimSpace(e)] = true
-	}
-
-	var out []runnerBin
+	found := map[string]runnerBin{}
+	var order []string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -296,10 +298,30 @@ func discover(cfg config) ([]runnerBin, error) {
 		if !ok || name == "" {
 			continue
 		}
-		if len(want) > 0 && !want[name] {
-			continue
+		found[name] = runnerBin{name: name, path: filepath.Join(cfg.binDir, e.Name())}
+		order = append(order, name)
+	}
+
+	if len(cfg.engines) > 0 {
+		order = order[:0]
+		for _, e := range cfg.engines {
+			name := strings.TrimSpace(e)
+			if name == "" {
+				continue
+			}
+			if _, ok := found[name]; !ok {
+				// Named and not there is a typo or a runner that was never
+				// built, and either way a silent skip means waiting out a whole
+				// run to find the engine missing from the table.
+				return nil, fmt.Errorf("no %s-runner in %s", name, cfg.binDir)
+			}
+			order = append(order, name)
 		}
-		out = append(out, runnerBin{name: name, path: filepath.Join(cfg.binDir, e.Name())})
+	}
+
+	out := make([]runnerBin, 0, len(order))
+	for _, name := range order {
+		out = append(out, found[name])
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("no runners in %s, run make build first", cfg.binDir)
