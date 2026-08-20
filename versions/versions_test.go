@@ -169,6 +169,72 @@ func TestAnUnreachableRegistryIsAnError(t *testing.T) {
 	}
 }
 
+// The metadata a Maven repository publishes carries three different answers to
+// "what is the latest", and the one the repository itself calls the release is
+// the one worth taking.
+func TestMavenIsAskedForTheReleaseAndNotTheNewestThingPublished(t *testing.T) {
+	var asked string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = r.URL.Path
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <groupId>org.apache.lucene</groupId>
+  <artifactId>lucene-core</artifactId>
+  <versioning>
+    <latest>10.4.0</latest>
+    <release>10.4.0</release>
+    <versions>
+      <version>9.12.3</version>
+      <version>10.3.2</version>
+      <version>10.4.0</version>
+    </versions>
+  </versioning>
+</metadata>
+`))
+	}))
+	defer srv.Close()
+
+	MavenRepository = srv.URL
+	defer func() { MavenRepository = "https://repo1.maven.org/maven2" }()
+
+	got, err := LatestMaven(context.Background(), srv.Client(), "org.apache.lucene:lucene-core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "10.4.0" {
+		t.Errorf("the latest lucene is %s, want 10.4.0", got)
+	}
+	if asked != "/org/apache/lucene/lucene-core/maven-metadata.xml" {
+		t.Errorf("asked for %s, which is not where a Maven repository files its metadata", asked)
+	}
+
+	if _, err := LatestMaven(context.Background(), srv.Client(), "lucene-core"); err == nil {
+		t.Error("a coordinate with no group in it was accepted")
+	}
+}
+
+// An artifact whose metadata has no release element falls back to the version
+// list, newest last, and a release candidate in there is not a release.
+func TestMavenSkipsAPreReleaseWhenItHasToReadTheVersionList(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<metadata><versioning><versions>` +
+			`<version>1.0.0</version><version>1.1.0</version><version>1.2.0-rc1</version>` +
+			`</versions></versioning></metadata>`))
+	}))
+	defer srv.Close()
+
+	MavenRepository = srv.URL
+	defer func() { MavenRepository = "https://repo1.maven.org/maven2" }()
+
+	got, err := LatestMaven(context.Background(), srv.Client(), "com.example:thing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "1.1.0" {
+		t.Errorf("the latest is %s, want 1.1.0 rather than the release candidate", got)
+	}
+}
+
 func TestTheSparseIndexPathIsTheOneCratesIoUses(t *testing.T) {
 	for crate, want := range map[string]string{
 		"a":         "1/a",
@@ -213,18 +279,19 @@ func TestTheManifestInTheRepositoryParses(t *testing.T) {
 			if e.Package == "" {
 				t.Errorf("%s is in a registry but names no package", e.Name)
 			}
-		case "github":
+		case "github", "maven":
 			if e.Package == "" {
 				t.Errorf("%s is in a registry but names no package", e.Name)
 			}
-			// A prebuilt library has no lock file, so the pin lives in the
-			// manifest and an entry without one has nothing to compare.
+			// A prebuilt library and a downloaded jar have no lock file, so
+			// the pin lives in the manifest and an entry without one has
+			// nothing to compare.
 			if e.Version == "" {
-				t.Errorf("%s is pinned to a github release but names no version", e.Name)
+				t.Errorf("%s is pinned by hand but names no version", e.Name)
 			}
 		case "none":
 		default:
-			t.Errorf("%s has registry %q, want gomod, crate, github, ours or none", e.Name, e.Registry)
+			t.Errorf("%s has registry %q, want gomod, crate, maven, github, ours or none", e.Name, e.Registry)
 		}
 		if seen[e.Name] {
 			t.Errorf("%s is in the manifest twice", e.Name)

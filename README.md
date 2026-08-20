@@ -97,6 +97,7 @@ Text:
 | sqlitefts | Go | SQLite FTS5 through a pure Go driver, the thing most projects reach for first |
 | tantivy | Rust | A fast Lucene style index, the number worth being measured against |
 | seekstorm | Rust | A newer memory mapped index making strong latency claims, worth checking |
+| lucene | Java | What most enterprise search is actually running, since Elasticsearch and OpenSearch are this with a cluster around it |
 | genba | Go | Our own index, the reason the rest of this exists |
 
 Vector:
@@ -122,9 +123,18 @@ Everything else in the suite builds and runs without it, and a machine that skip
 
     make ladybug
 
+lucene needs a step of its own for the same reason, since it is a set of jars and a virtual machine rather than a module or a crate.
+`runners/java/lucene/fetch.sh` downloads the jars its pin names and checks each one against the sha256 in `runners/java/lucene/lucene.json`, and `make lucene` compiles the runner against them and writes the wrapper the orchestrator runs.
+A machine with no Java compiler gets a text table without that row rather than a failure.
+
+    make lucene
+
+Lucene 10 reads its memory mapped files through the foreign memory API, which is final from Java 22 and a preview before it, so an older virtual machine falls back to a slower path.
+Build it on 22 or later, or the number in the table is not the one people are getting.
+
 Each engine is a separate binary that speaks a small contract: create, load, flush, open, ask, close.
 Adding one is a hundred lines and does not touch the harness.
-The Go runners live under `runners/`, one directory each, and the Rust runners share a cargo workspace at `runners/rust` so that the same measuring code times all of them.
+The Go runners live under `runners/`, one directory each, the Rust runners share a cargo workspace at `runners/rust`, and the Java one is at `runners/java/lucene`, each language with one copy of the measuring code so that the same stopwatch times every engine written in it.
 A text runner is called `<engine>-runner`, a vector runner `<engine>-vecrunner` and a graph runner `<engine>-graphrunner`, all built into `bin/`, and each suite only ever picks up its own.
 
 Every engine is pinned to a version and `kura-versions` compares each pin against its registry.

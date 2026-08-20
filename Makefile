@@ -106,6 +106,35 @@ rust-runners:
 ladybug-lib:
 	$(LADYBUG)/fetch.sh
 
+# Lucene is what most enterprise search actually runs on, since Elasticsearch
+# and OpenSearch are Lucene with a cluster around them, so it belongs in the
+# table. It is the one runner here that needs a Java compiler, and like ladybug
+# it is built by its own target rather than by the default one. Everything else
+# works without it.
+JAVA ?= java
+JAVAC ?= javac
+LUCENE := runners/java/lucene
+LUCENE_VERSION := $(shell sed -n 's/^[[:space:]]*"version": "\([^"]*\)".*/\1/p' $(LUCENE)/lucene.json | head -1)
+LUCENE_JARS := $(abspath $(LUCENE)/$(LUCENE_VERSION))
+LUCENE_CLASSES := $(abspath $(LUCENE)/classes)
+
+.PHONY: lucene-jars
+lucene-jars:
+	$(LUCENE)/fetch.sh
+
+# The wrapper is what the orchestrator runs, because the contract is an
+# executable named after the engine and a virtual machine needs a class path in
+# front of it. It is written with absolute paths so that it works from whatever
+# directory a run happens in.
+.PHONY: lucene
+lucene: lucene-jars
+	$(JAVAC) -d $(LUCENE_CLASSES) -cp "$(LUCENE_JARS)/*" $(LUCENE)/Bench.java $(LUCENE)/Runner.java
+	@mkdir -p $(BIN)
+	@printf '#!/bin/sh\nexec %s -cp "%s:%s/*" Runner "$$@"\n' \
+		"$(JAVA)" "$(LUCENE_CLASSES)" "$(LUCENE_JARS)" > $(BIN)/lucene-runner
+	@chmod +x $(BIN)/lucene-runner
+	@echo "built $(BIN)/lucene-runner against lucene $(LUCENE_VERSION)"
+
 # The rpath is what lets the binary find the library without an environment
 # variable at run time, which matters because the orchestrator starts the
 # runners itself.
@@ -204,7 +233,7 @@ graphbench: build
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN)
+	rm -rf $(BIN) $(LUCENE)/classes
 	@if command -v $(CARGO) >/dev/null 2>&1; then \
 		$(CARGO) clean --manifest-path $(RUST)/Cargo.toml; \
 	fi
