@@ -166,6 +166,24 @@ Each one is a shallow fetch of a single commit, the checkout is verified against
 
 Building it is the slowest step in the repository and it only has to happen once per machine.
 
+Source code is one shape of text and it is not the only one an engine gets asked to hold.
+Three published corpora cover the other shapes, and each is downloaded rather than cloned:
+
+```sh
+bin/kura-corpus -datasets
+bin/kura-corpus -dataset enron -out enron.jsonl
+bin/kura-corpus -dataset msmarco -out msmarco.jsonl
+bin/kura-corpus -dataset simplewiki -out simplewiki.jsonl
+```
+
+The mail archive is half a million short documents with real threads, real quoting and the same message sitting in a dozen mailboxes, which is the duplication every real deployment has and no generated corpus does.
+The passage collection is nine million documents of a few dozen words each, which is the shape that stops a scorer's per document cost hiding behind its per posting cost, and it is the only one of these that arrives with real queries and the judgments to say which passage answered them.
+The encyclopaedia dump is long articles with the wiki markup left on, because an engine in front of a wiki is handed the wiki's own markup and a corpus that strips it measures something nobody runs.
+
+The download is checksummed against a pin in `corpus/datasets.go` for the same reason the source trees pin a commit, and an archive already on the machine with the right checksum is left alone.
+`-limit` takes the first n documents, which is useful on a machine without room for the whole thing and which makes the file a latency corpus rather than a relevance corpus, since a judged document past the cut cannot be retrieved.
+`kura-corpus -datasets` prints the licence position for each one, and one of the three is local use only.
+
 For trying something out there are two other forms, which do not produce a comparable result and are not meant to:
 
 ```sh
