@@ -310,6 +310,21 @@ Two lines of it are not comparable across engines and are kept anyway.
 That is a real disagreement about a real query shape, since internal jargon and product codenames are written with underscores and people type them into search boxes.
 The latency on those two lines is two different questions being answered rather than one engine beating another, and the file says so where somebody reading the query set will see it.
 
+That file is about source code, because the checkouts are.
+Running it against mail or an encyclopaedia would measure a dictionary miss and call it a search, so each downloaded corpus gets its own set from `kura-queries`.
+
+```
+bin/kura-queries -corpus enron.jsonl -out queries-enron.txt
+bin/kura-queries -log queries.dev.small.tsv -n 40 -out queries-msmarco.txt
+```
+
+`-log` is the honest one and is used wherever a real log came down with the corpus, which for the passage collection means real search queries typed by real people.
+`-corpus` is for the corpora that arrive without one.
+It reads the corpus, counts how many documents each term is in, and picks from four bands of document frequency, because document frequency is what decides what a query costs an engine.
+Terms tied on frequency are walked at a stride rather than taken adjacently, so a band does not come out as three words that happen to sit next to each other in the dictionary.
+It also picks a few two word queries from adjacent pairs where both halves are common, since a query that is cheap word by word and expensive together is the case an engine either skips through or does not.
+The header of a generated file says it was constructed rather than logged, because a constructed query set tells you about latency and nothing about relevance.
+
 ## Reading a result
 
 Two things are worth knowing before comparing numbers from two files.

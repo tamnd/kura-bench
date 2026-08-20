@@ -33,13 +33,16 @@ GRAPH ?= ca-grqc
 all: build
 
 .PHONY: build
-build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench $(BIN)/kura-report go-runners rust-runners
+build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-queries $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench $(BIN)/kura-report go-runners rust-runners
 
 $(BIN)/kura-bench: $(shell find cmd/kura-bench bench -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-bench
 
 $(BIN)/kura-corpus: $(shell find cmd/kura-corpus corpus -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-corpus
+
+$(BIN)/kura-queries: $(shell find cmd/kura-queries corpus -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-queries
 
 $(BIN)/kura-vectors: $(shell find cmd/kura-vectors vectors -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-vectors
@@ -147,6 +150,24 @@ textset: $(BIN)/kura-corpus
 # the passage collection is nine million documents and not every machine that
 # wants a latency number has room for it.
 TEXTLIMIT ?= 0
+
+# Writes the query set for a corpus. queries.txt is about source code and asks
+# about deadlocks and mmap, so running it against mail or an encyclopaedia
+# measures nothing. Each corpus gets its own set, built from the corpus itself
+# unless a real query log came down with it.
+.PHONY: textqueries
+textqueries: $(BIN)/kura-queries
+	@if [ -f queries.dev.small.tsv ] && [ "$(TEXTSET)" = "msmarco" ]; then \
+		$(BIN)/kura-queries -log queries.dev.small.tsv -out queries-$(TEXTSET).txt; \
+	else \
+		$(BIN)/kura-queries -corpus $(TEXTSET).jsonl -out queries-$(TEXTSET).txt; \
+	fi
+
+# The whole run against a downloaded corpus, which is the shortest way to a
+# number on something other than source code.
+.PHONY: textbench
+textbench: build textqueries
+	$(BIN)/kura-bench -corpus $(TEXTSET).jsonl -queries queries-$(TEXTSET).txt -bin $(BIN) -out results
 
 .PHONY: bench
 bench: build
