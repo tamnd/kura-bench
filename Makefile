@@ -122,6 +122,14 @@ LUCENE_CLASSES := $(abspath $(LUCENE)/classes)
 lucene-jars:
 	$(LUCENE)/fetch.sh
 
+# The two flags are the ones Lucene asks for at startup when it does not have
+# them. Without the incubator module it falls back to scalar code in the places
+# it has written vector code for, and without native access it prints a warning
+# on every run about a restricted method that a later release will refuse
+# outright. Both are what its own documentation tells an operator to pass, so
+# running without them would measure a Lucene nobody deploys.
+LUCENE_FLAGS := --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED
+
 # The wrapper is what the orchestrator runs, because the contract is an
 # executable named after the engine and a virtual machine needs a class path in
 # front of it. It is written with absolute paths so that it works from whatever
@@ -130,8 +138,8 @@ lucene-jars:
 lucene: lucene-jars
 	$(JAVAC) -d $(LUCENE_CLASSES) -cp "$(LUCENE_JARS)/*" $(LUCENE)/Bench.java $(LUCENE)/Runner.java
 	@mkdir -p $(BIN)
-	@printf '#!/bin/sh\nexec %s -cp "%s:%s/*" Runner "$$@"\n' \
-		"$(JAVA)" "$(LUCENE_CLASSES)" "$(LUCENE_JARS)" > $(BIN)/lucene-runner
+	@printf '#!/bin/sh\nexec %s %s -cp "%s:%s/*" Runner "$$@"\n' \
+		"$(JAVA)" "$(LUCENE_FLAGS)" "$(LUCENE_CLASSES)" "$(LUCENE_JARS)" > $(BIN)/lucene-runner
 	@chmod +x $(BIN)/lucene-runner
 	@echo "built $(BIN)/lucene-runner against lucene $(LUCENE_VERSION)"
 

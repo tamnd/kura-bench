@@ -66,6 +66,30 @@ public final class Runner {
     // the same reason it is on every other engine in this suite.
     private static final String[] SEARCHED = {"title", "body"};
 
+    /**
+     * How long the query set is run before anything is timed, and how many
+     * searches that is allowed to take.
+     *
+     * This is the one place where Lucene is treated differently from the other
+     * engines here, and it is worth being loud about. The harness gives every
+     * query a single warm up run, which is the right amount for a compiled
+     * engine that only has to fill a cache. A virtual machine interprets its
+     * code until it has seen it enough times to be worth compiling, and at one
+     * warm up and twenty timed runs a query the timed runs are measuring the
+     * compiler. The same objection would apply to any engine on this platform,
+     * so the fix is here rather than in the harness, and it moves the number in
+     * Lucene's favour, which is the direction an argument about it should have
+     * to work against.
+     *
+     * Five seconds and a hundred thousand searches are the shape of what the
+     * Java benchmarking harness people already use does by default. Whichever
+     * comes first ends it, so a slow query set does not stall a run and a fast
+     * one still gets enough iterations to compile.
+     */
+    private static final double WARMUP_SECONDS = 5;
+
+    private static final int WARMUP_SEARCHES = 100_000;
+
     public static void main(String[] args) {
         try {
             run(args);
@@ -89,7 +113,11 @@ public final class Runner {
                 + "collector has not returned and is the memory the process asked for rather "
                 + "than the memory it needed. Documents are fed to the writer from one thread, "
                 + "the way the harness feeds every other engine, so the index phase does not "
-                + "use the several threads a Lucene bulk load usually gets.";
+                + "use the several threads a Lucene bulk load usually gets. The query set is "
+                + "run for five seconds before anything is timed, which no other engine here "
+                + "gets, because a virtual machine that has not compiled the code yet reports "
+                + "the compiler as latency. The index phase gets no such warm up and pays for "
+                + "the compiling as it goes.";
 
         switch (cfg.phase) {
             case "index" -> indexPhase(cfg, res);
@@ -213,6 +241,11 @@ public final class Runner {
         res.openUsage = open;
         res.openResidentBytes = open.rssBytes;
 
+        // Outside the timed region on purpose. The cold start above is a real
+        // cost and keeps its number, and the processor time this burns belongs
+        // to nobody.
+        warmUp(searcher, parser, queries);
+
         Bench.Snapshot searchStart = Bench.take();
         List<Bench.QueryStat> stats = new ArrayList<>(queries.size());
         List<String> ids = new ArrayList<>(Bench.SEARCH_LIMIT);
@@ -245,6 +278,25 @@ public final class Runner {
         reader.close();
         dir.close();
         updatePhase(cfg, res);
+    }
+
+    /** Runs the query set until the compiler has had a chance at it. What it
+     * did is printed, because a warm up nobody can see the size of is a knob
+     * rather than a measurement. */
+    private static void warmUp(IndexSearcher searcher, QueryParser parser, List<String> queries)
+            throws IOException {
+        long start = System.nanoTime();
+        int searches = 0;
+        while (searches < WARMUP_SEARCHES
+                && (System.nanoTime() - start) / 1e9 < WARMUP_SECONDS) {
+            for (String q : queries) {
+                searchOnce(searcher, parser, q, null);
+                searches++;
+            }
+        }
+        System.err.printf(
+                "warmed up with %d searches in %.1fs before timing anything%n",
+                searches, (System.nanoTime() - start) / 1e9);
     }
 
     private static QueryParser parser() {
