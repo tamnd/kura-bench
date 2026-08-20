@@ -1691,7 +1691,7 @@ dependencies = [
 [[package]]
 name = "kura-core"
 version = "0.1.0"
-source = "git+https://github.com/tamnd/kura?rev=0b35c047fc22deb391ca3b6e6b1c6baf8d428f58#0b35c047fc22deb391ca3b6e6b1c6baf8d428f58"
+source = "git+https://github.com/tamnd/kura?rev=3eb2493001b13bb7f3a99f988c44c7ed03b9029b#3eb2493001b13bb7f3a99f988c44c7ed03b9029b"
 
 [[package]]
 name = "kura-runner"
