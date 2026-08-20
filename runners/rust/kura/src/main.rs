@@ -19,6 +19,15 @@
 //! of the corpus is not an operation this engine can do, and reporting the time
 //! to append the same documents twice would be reporting a different operation
 //! under the same name.
+//!
+//! The index phase reads the corpus on every core. Each thread takes a byte
+//! range of the file, parses the documents in it and fills a writer of its own,
+//! and the writers are folded into one segment at the end. That means the JSON
+//! parsing goes wide here where the Tantivy runner does it on one thread, so
+//! part of the difference in wall time is the parser rather than the index.
+//! Tantivy's own writer threads do the analysis, so the analysis is wide in
+//! both. The single threaded number is in the pull request that added this, for
+//! anyone who wants the engine on its own.
 
 use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -69,10 +78,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 const NO_UPDATES: &str =
     "there is no update phase because the engine has no tombstones yet, so it cannot replace a document";
 
-fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std::error::Error>> {
-    std::fs::create_dir_all(&cfg.work)?;
+/// Indexes one slice of the corpus, and returns the writer with what it read.
+///
+/// This is the whole of the per thread work: read the range, join the title and
+/// the body, hand it to a writer of its own. Nothing is shared, so there is no
+/// lock here and no channel.
+fn index_slice(
+    corpus: &std::path::Path,
+    from: u64,
+    to: u64,
+    limit: usize,
+) -> Result<(index::Writer, usize, i64), Box<dyn std::error::Error + Send + Sync>> {
     let mut writer = index::Writer::new();
-
     let mut documents = 0usize;
     let mut bytes = 0i64;
     let mut failed: Option<kura_core::error::Error> = None;
@@ -81,9 +98,8 @@ fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     // be measuring the allocator.
     let mut text = String::new();
 
-    let start = usage::take();
-    corpus::read(&cfg.corpus, |d| {
-        if cfg.limit > 0 && documents >= cfg.limit {
+    corpus::read_range(corpus, from, to, |d| {
+        if limit > 0 && documents >= limit {
             return false;
         }
         documents += 1;
@@ -112,11 +128,52 @@ fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     if let Some(e) = failed {
         return Err(e.into());
     }
+    Ok((writer, documents, bytes))
+}
+
+fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(&cfg.work)?;
+    // One slice per core unless the run asked for a document limit, which is
+    // there for smoke tests and means the first so many documents of the file
+    // rather than the first so many of each slice.
+    //
+    // KURA_INDEX_THREADS overrides the count. It is there so a run can take the
+    // whole scaling curve on one machine rather than one point on it, and the
+    // default is every core, which is what a comparison uses.
+    let threads = if cfg.limit > 0 {
+        1
+    } else {
+        std::env::var("KURA_INDEX_THREADS")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|threads| *threads > 0)
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+            })
+    };
+    let ranges = corpus::shards(&cfg.corpus, threads)?;
+
+    let start = usage::take();
+    let parts = std::thread::scope(|scope| {
+        let handles: Vec<_> = ranges
+            .iter()
+            .map(|&(from, to)| scope.spawn(move || index_slice(&cfg.corpus, from, to, cfg.limit)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap_or_else(|_| Err("a slice panicked".into())))
+            .collect::<Result<Vec<_>, _>>()
+    })
+    .map_err(|e| e.to_string())?;
+
+    let documents = parts.iter().map(|(_, count, _)| count).sum::<usize>();
+    let bytes = parts.iter().map(|(_, _, bytes)| bytes).sum::<i64>();
+    let writers: Vec<index::Writer> = parts.into_iter().map(|(writer, _, _)| writer).collect();
 
     // The phase is timed to the end of the write, not to the end of the last
     // add, because an engine that buffers and flushes later has not done less
     // work than one that flushed as it went.
-    let segment = writer.finish()?;
+    let segment = index::Writer::concat(writers)?;
     let path = cfg.work.join(INDEX_FILE);
     let mut file = std::fs::File::create(&path)?;
     file.write_all(&segment)?;
@@ -132,7 +189,7 @@ fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         files,
     };
     eprintln!(
-        "indexed {documents} documents in {:.1}s, {:.1} MB/s, index {:.1} MB",
+        "indexed {documents} documents on {threads} threads in {:.1}s, {:.1} MB/s, index {:.1} MB",
         phase.wall_seconds,
         bytes as f64 / (1 << 20) as f64 / phase.wall_seconds,
         size as f64 / (1 << 20) as f64,
