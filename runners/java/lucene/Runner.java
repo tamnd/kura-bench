@@ -81,12 +81,14 @@ public final class Runner {
      * Lucene's favour, which is the direction an argument about it should have
      * to work against.
      *
-     * Five seconds and a hundred thousand searches are the shape of what the
-     * Java benchmarking harness people already use does by default. Whichever
-     * comes first ends it, so a slow query set does not stall a run and a fast
-     * one still gets enough iterations to compile.
+     * Fifteen seconds and a hundred thousand searches, whichever comes first,
+     * so a slow query set does not stall a run and a fast one still gets
+     * enough iterations to be worth compiling. The Java benchmarking harness
+     * people already use spends about a minute by default, and this is shorter
+     * than that because the phase after it is twenty runs of a query set and
+     * not a microbenchmark.
      */
-    private static final double WARMUP_SECONDS = 5;
+    private static final double WARMUP_SECONDS = 15;
 
     private static final int WARMUP_SEARCHES = 100_000;
 
@@ -114,10 +116,10 @@ public final class Runner {
                 + "than the memory it needed. Documents are fed to the writer from one thread, "
                 + "the way the harness feeds every other engine, so the index phase does not "
                 + "use the several threads a Lucene bulk load usually gets. The query set is "
-                + "run for five seconds before anything is timed, which no other engine here "
-                + "gets, because a virtual machine that has not compiled the code yet reports "
-                + "the compiler as latency. The index phase gets no such warm up and pays for "
-                + "the compiling as it goes.";
+                + "run for " + (int) WARMUP_SECONDS + " seconds before anything is timed, which "
+                + "no other engine here gets, because a virtual machine that has not compiled "
+                + "the code yet reports the compiler as latency. The index phase gets no such "
+                + "warm up and pays for the compiling as it goes.";
 
         switch (cfg.phase) {
             case "index" -> indexPhase(cfg, res);
