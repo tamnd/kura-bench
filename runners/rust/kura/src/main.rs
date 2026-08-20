@@ -30,6 +30,7 @@ use benchrs::{SEARCH_LIMIT, config, corpus, machine, result, usage};
 use kura_core::index;
 use kura_core::search::Searcher;
 use kura_core::segment::Segment;
+use kura_core::store;
 
 /// The one file a kura index is.
 const INDEX_FILE: &str = "index.kura";
@@ -61,12 +62,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         other => return Err(format!("unknown phase {other}").into()),
     }
-    if res.notes.is_empty() {
-        res.notes = NO_UPDATES.to_string();
-    } else {
-        res.notes = format!("{}; {NO_UPDATES}", res.notes);
-    }
-
     println!("{}", serde_json::to_string(&res)?);
     Ok(())
 }
@@ -167,7 +162,8 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     let map = unsafe { memmap2::Mmap::map(&file)? };
     let segment = Segment::open_without_checksum(&map)?;
     let reader = index::Reader::open(&segment)?;
-    search_once(&reader, &queries[0], SEARCH_LIMIT)?;
+    let mut scratch = store::Scratch::new();
+    search_once(&reader, &queries[0], SEARCH_LIMIT, &mut scratch)?;
     let open = usage::measure(&open_start);
     res.open = result::OpenPhase {
         resident_bytes: open.rss_bytes,
@@ -180,11 +176,11 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         // One warm up that is not counted, because the first run of a query
         // pays for whatever the operating system has not faulted in yet and no
         // deployment sees that cost on every request.
-        let mut hits = search_once(&reader, q, SEARCH_LIMIT)?;
+        let mut hits = search_once(&reader, q, SEARCH_LIMIT, &mut scratch)?;
         let mut runs = Vec::with_capacity(cfg.repeat);
         for _ in 0..cfg.repeat {
             let t = Instant::now();
-            hits = search_once(&reader, q, SEARCH_LIMIT)?;
+            hits = search_once(&reader, q, SEARCH_LIMIT, &mut scratch)?;
             runs.push(t.elapsed().as_secs_f64() * 1000.0);
         }
         stats.push(result::summarise(q, hits, runs));
@@ -197,8 +193,16 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         queries: stats,
         concurrent,
     };
-    // No update phase. See the note at the top of the file.
+    // No update phase. See the note at the top of the file. The note is set
+    // here rather than in run, because the harness runs the phases as separate
+    // processes and merges the two results, and a note set in both would be
+    // written down twice.
     res.update = None;
+    if res.notes.is_empty() {
+        res.notes = NO_UPDATES.to_string();
+    } else {
+        res.notes = format!("{}; {NO_UPDATES}", res.notes);
+    }
     Ok(())
 }
 
@@ -210,6 +214,7 @@ fn search_once(
     reader: &index::Reader<'_>,
     query: &str,
     limit: usize,
+    scratch: &mut store::Scratch,
 ) -> kura_core::error::Result<usize> {
     let searcher = Searcher::new(reader);
     // A bare query is read as OR, which is how every other engine here is asked
@@ -217,10 +222,12 @@ fn search_once(
     let total = searcher.count(query)?;
     let hits = searcher.search(query, limit)?;
     // The stored fields are read for the page, because a result nobody can show
-    // is not a result and the rivals pay for this too.
+    // is not a result and the rivals pay for this too. The store is compressed
+    // in blocks, so this is a decompression per block the page touches, which
+    // is what a caller building a result set would pay.
     if let Some(store) = reader.store() {
         for hit in &hits {
-            let mut fields = store.get(hit.doc)?;
+            let mut fields = store.get(hit.doc, scratch)?;
             while fields.next_field()?.is_some() {}
         }
     }
@@ -256,12 +263,15 @@ fn concurrent_phase(
             let jobs = &jobs;
             let next = &next;
             handles.push(scope.spawn(move || {
+                // A scratch per worker, because it is where a block is
+                // decompressed and sharing one would be sharing a buffer.
+                let mut scratch = store::Scratch::new();
                 let mut times = Vec::new();
                 loop {
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(q) = jobs.get(i) else { break };
                     let t = Instant::now();
-                    if search_once(reader, q, SEARCH_LIMIT).is_err() {
+                    if search_once(reader, q, SEARCH_LIMIT, &mut scratch).is_err() {
                         return None;
                     }
                     times.push(t.elapsed().as_secs_f64() * 1000.0);
