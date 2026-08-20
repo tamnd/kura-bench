@@ -35,18 +35,19 @@ import (
 
 func main() {
 	corpusPath := flag.String("corpus", "", "corpus file to build a query set from")
+	sample := flag.Int("sample", sampleDocuments, "how many documents the vocabulary is taken from, zero for all of them")
 	logPath := flag.String("log", "", "a real query log, one query per line or an id and a query separated by a tab")
 	n := flag.Int("n", 40, "how many queries to take from a -log")
 	out := flag.String("out", "", "file to write, standard output if empty")
 	flag.Parse()
 
-	if err := run(*corpusPath, *logPath, *out, *n); err != nil {
+	if err := run(*corpusPath, *logPath, *out, *n, *sample); err != nil {
 		fmt.Fprintln(os.Stderr, "kura-queries:", err)
 		os.Exit(1)
 	}
 }
 
-func run(corpusPath, logPath, out string, n int) error {
+func run(corpusPath, logPath, out string, n, sample int) error {
 	if (corpusPath == "") == (logPath == "") {
 		return fmt.Errorf("give exactly one of -corpus and -log")
 	}
@@ -56,7 +57,7 @@ func run(corpusPath, logPath, out string, n int) error {
 	if logPath != "" {
 		text, err = fromLog(logPath, n)
 	} else {
-		text, err = fromCorpus(corpusPath)
+		text, err = fromCorpus(corpusPath, sample)
 	}
 	if err != nil {
 		return err
@@ -173,8 +174,8 @@ func bands() []band {
 }
 
 // fromCorpus builds a query set out of the corpus itself.
-func fromCorpus(path string) (string, error) {
-	documents, df, err := documentFrequency(path)
+func fromCorpus(path string, sample int) (string, error) {
+	documents, df, err := documentFrequency(path, sample)
 	if err != nil {
 		return "", err
 	}
@@ -214,7 +215,11 @@ func fromCorpus(path string) (string, error) {
 	b.WriteString("# record of anything anybody searched for. Regenerate it with kura-queries\n")
 	b.WriteString("# rather than editing it, so that it keeps describing the corpus it names.\n")
 	b.WriteString("#\n")
-	fmt.Fprintf(&b, "# %d documents, %d distinct terms. Lines starting with a hash are ignored.\n", documents, len(df))
+	fmt.Fprintf(&b, "# %d documents, %d terms counted", documents, len(df))
+	if sample > 0 && sample < documents {
+		fmt.Fprintf(&b, ", taken from the first %d documents", sample)
+	}
+	b.WriteString(". Lines starting with a hash are ignored.\n")
 
 	used := make(map[string]bool)
 	for _, band := range bands() {
@@ -309,9 +314,10 @@ const pairsWanted = 4
 func commonPairs(path string, df map[string]int, documents int) ([]string, error) {
 	floor := int(pairShare * float64(documents))
 	count := make(map[string]int)
+	seen := make(map[string]bool)
 
 	_, err := corpus.ReadFile(path, func(d corpus.Document) error {
-		seen := make(map[string]bool)
+		clear(seen)
 		var previous string
 		for _, term := range terms(d.Title + " " + d.Body) {
 			if previous != "" && df[previous] >= floor && df[term] >= floor {
@@ -359,23 +365,62 @@ func commonPairs(path string, df map[string]int, documents int) ([]string, error
 	return out, nil
 }
 
+// sampleDocuments is how many documents the vocabulary is taken from.
+//
+// Counting every term in the corpus is the obvious implementation and it does
+// not survive a real one. Half a million mail messages hold tens of millions of
+// distinct terms, because every message identifier, every quoted-printable
+// fragment and every mangled address is a term that occurs once, and a map with
+// an entry for each of them is gigabytes before it has counted anything worth
+// having.
+//
+// So the vocabulary comes from the first documents and the counting runs over
+// all of them. Fifty thousand documents is far more than enough to contain
+// every term a query set would want, since a term this misses is one that
+// appears in none of the first fifty thousand documents and is therefore rarer
+// than the rarest band asks for.
+const sampleDocuments = 50000
+
 // documentFrequency counts how many documents each term is in.
 //
 // It is documents rather than occurrences because that is the number that
 // decides how long a posting list is, and the length of the posting list is
 // what a query costs.
-func documentFrequency(path string) (int, map[string]int, error) {
+//
+// Two passes. The first fixes the vocabulary from the head of the corpus and
+// the second counts those terms over the whole of it, so the counts are exact
+// for every term that is counted and the memory is bounded by the sample rather
+// than by the corpus.
+func documentFrequency(path string, sample int) (int, map[string]int, error) {
 	df := make(map[string]int)
-	documents := 0
+	// One map reused across documents. A corpus this size is half a million
+	// calls, and allocating a map in each of them measures the allocator.
+	seen := make(map[string]bool)
 
+	read := 0
+	if _, err := corpus.ReadFile(path, func(d corpus.Document) error {
+		read++
+		for _, term := range terms(d.Title + " " + d.Body) {
+			df[term] = 0
+		}
+		if sample > 0 && read >= sample {
+			return corpus.ErrStop
+		}
+		return nil
+	}); err != nil {
+		return 0, nil, err
+	}
+
+	documents := 0
 	_, err := corpus.ReadFile(path, func(d corpus.Document) error {
 		documents++
-		seen := make(map[string]bool)
+		clear(seen)
 		for _, term := range terms(d.Title + " " + d.Body) {
-			if !seen[term] {
-				seen[term] = true
-				df[term]++
+			if _, want := df[term]; !want || seen[term] {
+				continue
 			}
+			seen[term] = true
+			df[term]++
 		}
 		return nil
 	})

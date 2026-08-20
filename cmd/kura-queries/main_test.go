@@ -18,11 +18,11 @@ import (
 func TestBandsComeOutInOrder(t *testing.T) {
 	path := writeCorpus(t, 2000)
 
-	text, err := fromCorpus(path)
+	text, err := fromCorpus(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, df, err := documentFrequency(path)
+	_, df, err := documentFrequency(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestBandsComeOutInOrder(t *testing.T) {
 func TestEveryQueryReallyOccurs(t *testing.T) {
 	path := writeCorpus(t, 500)
 
-	text, err := fromCorpus(path)
+	text, err := fromCorpus(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,16 +74,60 @@ func TestEveryQueryReallyOccurs(t *testing.T) {
 	}
 }
 
+// The vocabulary is taken from the head of the corpus so that a large one does
+// not need a map with an entry for every term in it. A term the sample misses
+// is one that appears in none of the first documents, which is rarer than the
+// rarest band asks for, so the bands have to come out the same either way.
+func TestSamplingTheVocabularyDoesNotChangeTheBands(t *testing.T) {
+	path := writeCorpus(t, 2000)
+
+	whole, err := fromCorpus(path, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sampled, err := fromCorpus(path, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !equalQueries(queries(whole), queries(sampled)) {
+		t.Errorf("counting every term gave %q and sampling gave %q", queries(whole), queries(sampled))
+	}
+}
+
+// The counts have to be exact for the terms that are counted, even though the
+// vocabulary they came from is a sample. A term picked from the head of the
+// corpus and then counted over a tenth of it would describe a distribution
+// nobody is searching.
+func TestTheCountsCoverTheWholeCorpusEvenWhenTheVocabularyDoesNot(t *testing.T) {
+	path := writeCorpus(t, 1000)
+
+	documents, df, err := documentFrequency(path, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if documents != 1000 {
+		t.Fatalf("counted %d documents, want all 1000", documents)
+	}
+	// Every document has this word in it.
+	if got := df["quick"]; got != 1000 {
+		t.Errorf("quick is in %d documents, want all 1000", got)
+	}
+	// One document in two has this one.
+	if got := df["band1term"]; got != 500 {
+		t.Errorf("band1term is in %d documents, want 500", got)
+	}
+}
+
 func TestTheSameCorpusGivesTheSameQueries(t *testing.T) {
 	path := writeCorpus(t, 300)
 
 	// Two runs over the same corpus have to agree, or two machines running the
 	// same benchmark are not running the same benchmark.
-	first, err := fromCorpus(path)
+	first, err := fromCorpus(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := fromCorpus(path)
+	second, err := fromCorpus(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,6 +233,18 @@ func writeCorpus(t *testing.T, documents int) string {
 		}
 	}
 	return path
+}
+
+func equalQueries(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // queries is the lines of a query set that are queries.
