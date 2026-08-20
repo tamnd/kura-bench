@@ -202,6 +202,12 @@ The download is checksummed against a pin in `corpus/datasets.go` for the same r
 `-limit` takes the first n documents, which is useful on a machine without room for the whole thing and which makes the file a latency corpus rather than a relevance corpus, since a judged document past the cut cannot be retrieved.
 `kura-corpus -datasets` prints the licence position for each one, and one of the three is local use only.
 
+That last point is enforced rather than remembered.
+Every built corpus gets a small `<corpus>.dataset.json` beside it saying what it is and whether content from it may leave the machine, and `kura-bench` reads it before anything runs.
+For a corpus that may not, the result files carry the timings, the hit counts, the sizes and the query text, and not the list of documents each engine returned.
+That list is the one field in a result file that can identify a person, since the mail corpus names its documents by mailbox path, and a result file is exactly the kind of thing somebody commits without thinking about it.
+A corpus with no label beside it is treated as restricted and says so on stderr, which is the wrong answer for most corpora and the right default anyway: being wrong that way costs a rerun, and being wrong the other way puts a real person's name in a public history, which no later commit undoes.
+
 For trying something out there are two other forms, which do not produce a comparable result and are not meant to:
 
 ```sh

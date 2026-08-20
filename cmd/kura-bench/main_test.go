@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tamnd/kura-bench/bench"
 )
 
 // An engine that logs while it indexes must not cost itself a row in the table,
@@ -112,4 +114,39 @@ func equal(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// The mail corpus identifies documents by mailbox path, which carries the
+// surnames of real people, and a result file is a thing somebody commits. The
+// timings are what the table is built from and they all survive.
+func TestARestrictedCorpusLosesTheDocumentsAndKeepsTheNumbers(t *testing.T) {
+	res := bench.Result{
+		Engine: "kura",
+		Search: bench.SearchPhase{
+			Depth: 10,
+			Queries: []bench.QueryStat{
+				{Query: "the", Hits: 418577, Runs: 20, MedianMS: 5.08, IDs: []string{"a/inbox/1.", "b/sent/2."}},
+				{Query: "meeting", Hits: 9012, Runs: 20, MedianMS: 1.2, IDs: []string{"c/inbox/3."}},
+			},
+		},
+	}
+
+	got := withoutDocuments(res)
+
+	for _, q := range got.Search.Queries {
+		if q.IDs != nil {
+			t.Errorf("%q still carries %v", q.Query, q.IDs)
+		}
+		if q.Runs != 20 || q.MedianMS == 0 || q.Hits == 0 {
+			t.Errorf("%q lost a timing as well: %+v", q.Query, q)
+		}
+	}
+	if got.Search.Depth != 10 {
+		t.Errorf("the depth was lost, so nothing downstream can tell what these were measured at")
+	}
+	// The caller keeps its own copy, since it may still want to write the
+	// report from the full result.
+	if res.Search.Queries[0].IDs == nil {
+		t.Error("the original was modified in place")
+	}
 }

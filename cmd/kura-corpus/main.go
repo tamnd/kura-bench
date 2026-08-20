@@ -150,6 +150,20 @@ func run(root string, repos repoList, src, dataset, cache, out string, limit int
 		return err
 	}
 
+	// Written every time, including for a corpus built out of source checkouts,
+	// because the benchmark treats a corpus it knows nothing about as one it may
+	// not quote from. A label saying "public" is how an ordinary corpus keeps
+	// its document identifiers.
+	label := corpus.Label{Public: true, Documents: stats.Documents, Bytes: stats.Bytes}
+	if dataset != "" {
+		label.Dataset = chosen.Name
+		label.Licence = chosen.Licence
+		label.Public = chosen.Public
+	}
+	if err := corpus.WriteLabel(out, label); err != nil {
+		return err
+	}
+
 	info, err := os.Stat(out)
 	if err != nil {
 		return err

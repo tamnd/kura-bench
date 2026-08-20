@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/tamnd/kura-bench/bench"
+	"github.com/tamnd/kura-bench/corpus"
 )
 
 func main() {
@@ -105,6 +106,13 @@ func run(cfg config) error {
 		}
 	}
 
+	// Asked once, up front, so the operator finds out before spending an hour
+	// rather than afterwards.
+	publishable, why := corpus.Publishable(cfg.corpus)
+	if !publishable {
+		fmt.Fprintf(os.Stderr, "%s\nthe result files will carry the timings but not the documents that came back, so nothing here identifies anybody\n", why)
+	}
+
 	// Once, before anything runs, because it digests the corpus and there is no
 	// sense doing that five times over the same file. Every result gets a copy,
 	// so each file stands on its own rather than only meaning something next to
@@ -133,6 +141,9 @@ func run(cfg config) error {
 			fmt.Fprintf(os.Stderr, "%s: %s, keeping what it did measure\n", r.name, res.Incomplete)
 		}
 		res.Run = &run
+		if !publishable {
+			res = withoutDocuments(res)
+		}
 		results = append(results, res)
 
 		name := filepath.Join(cfg.out, r.name+"-"+hostSlug(res.Machine.Host)+".json")
@@ -188,6 +199,27 @@ func measure(cfg config, r runnerBin, work string) (bench.Result, error) {
 		return bench.Result{}, fmt.Errorf("query phase: %w", err)
 	}
 	return bench.Merge(index, query), nil
+}
+
+// withoutDocuments strips the identifiers an engine returned, for a corpus
+// whose documents may not leave the machine.
+//
+// Everything a table is built from survives: the timings, the hit counts, the
+// sizes, the query text. What goes is the list of documents that came back,
+// which for the mail corpus is a list of real people's mailbox paths and is the
+// one field in a result file that identifies anybody.
+//
+// The cost is that relevance cannot be scored from these files, which is not a
+// cost at all: the corpora with judgments are the publishable ones, and a
+// restricted corpus has no judgments to score against.
+func withoutDocuments(res bench.Result) bench.Result {
+	stripped := make([]bench.QueryStat, len(res.Search.Queries))
+	copy(stripped, res.Search.Queries)
+	for i := range stripped {
+		stripped[i].IDs = nil
+	}
+	res.Search.Queries = stripped
+	return res
 }
 
 // incomplete is what an engine that ran out of time gets instead of being
