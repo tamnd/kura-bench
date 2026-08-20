@@ -132,6 +132,22 @@ lint:
 corpus: $(BIN)/kura-corpus
 	$(BIN)/kura-corpus -root $(ROOT) -out $(CORPUS)
 
+# Downloads a published corpus and builds it. Source code is one shape of text
+# and these are the others, so a number measured on one of them is a different
+# fact from the same number measured on the checkouts. The archive is
+# checksummed and kept, so running this again costs nothing.
+TEXTSET ?= enron
+CACHE ?= cache
+
+.PHONY: textset
+textset: $(BIN)/kura-corpus
+	$(BIN)/kura-corpus -dataset $(TEXTSET) -cache $(CACHE) -limit $(TEXTLIMIT) -out $(TEXTSET).jsonl
+
+# Zero means all of them. It is a variable rather than a hardcoded zero because
+# the passage collection is nine million documents and not every machine that
+# wants a latency number has room for it.
+TEXTLIMIT ?= 0
+
 .PHONY: bench
 bench: build
 	$(BIN)/kura-bench -corpus $(CORPUS) -queries $(QUERIES) -bin $(BIN) -out results
