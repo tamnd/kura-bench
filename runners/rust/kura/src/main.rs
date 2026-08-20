@@ -29,7 +29,6 @@
 //! both. The single threaded number is in the pull request that added this, for
 //! anyone who wants the engine on its own.
 
-use std::io::Write;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
@@ -75,8 +74,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-const NO_UPDATES: &str =
-    "there is no update phase because the engine has no tombstones yet, so it cannot replace a document";
+const NO_UPDATES: &str = "there is no update phase because the engine has no tombstones yet, so it cannot replace a document";
 
 /// Indexes one slice of the corpus, and returns the writer with what it read.
 ///
@@ -161,7 +159,11 @@ fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
             .collect();
         handles
             .into_iter()
-            .map(|handle| handle.join().unwrap_or_else(|_| Err("a slice panicked".into())))
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err("a slice panicked".into()))
+            })
             .collect::<Result<Vec<_>, _>>()
     })
     .map_err(|e| e.to_string())?;
@@ -173,10 +175,15 @@ fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     // The phase is timed to the end of the write, not to the end of the last
     // add, because an engine that buffers and flushes later has not done less
     // work than one that flushed as it went.
-    let segment = index::Writer::concat(writers)?;
+    //
+    // The segment is written straight to the file rather than asked for its
+    // bytes, which would mean holding a second whole copy of the index in
+    // memory, and on a corpus this size that copy is most of the peak.
+    let segment = index::Writer::build(writers)?;
     let path = cfg.work.join(INDEX_FILE);
-    let mut file = std::fs::File::create(&path)?;
-    file.write_all(&segment)?;
+    let mut file = std::io::BufWriter::new(std::fs::File::create(&path)?);
+    segment.write_to(&mut file)?;
+    let file = file.into_inner()?;
     file.sync_all()?;
     drop(file);
     let phase = usage::measure(&start);
@@ -275,9 +282,10 @@ fn search_once(
 ) -> kura_core::error::Result<usize> {
     let searcher = Searcher::new(reader);
     // A bare query is read as OR, which is how every other engine here is asked
-    // to read it.
-    let total = searcher.count(query)?;
-    let hits = searcher.search(query, limit)?;
+    // to read it. The page and the total come out of one walk of the posting
+    // lists, which is what Tantivy's runner asks for too when it hands the
+    // search a Count and a TopDocs collector together.
+    let (hits, total) = searcher.search_and_count(query, limit)?;
     // The stored fields are read for the page, because a result nobody can show
     // is not a result and the rivals pay for this too. The store is compressed
     // in blocks, so this is a decompression per block the page touches, which
