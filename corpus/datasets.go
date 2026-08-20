@@ -91,7 +91,7 @@ func Datasets() []Dataset {
 		{
 			Name:    "enron",
 			URL:     "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz",
-			SHA256:  "",
+			SHA256:  "b3da1b3fe0369ec3140bb4fbce94702c33b7da810ec15d718b3fadf5cd748ca7",
 			Bytes:   443254787,
 			Licence: "released in a federal investigation, real personal data, local use only",
 			Public:  false,
@@ -102,7 +102,7 @@ func Datasets() []Dataset {
 		{
 			Name:    "msmarco",
 			URL:     "https://msmarco.z22.web.core.windows.net/msmarcoranking/collectionandqueries.tar.gz",
-			SHA256:  "",
+			SHA256:  "decac356eb8cc5b9cea2e30b8738dc6f367e4147aaefe8fc7526ddda382fd2fc",
 			Bytes:   1057717952,
 			Licence: "Microsoft research licence, check it before anything ships",
 			Public:  true,
@@ -114,8 +114,8 @@ func Datasets() []Dataset {
 		{
 			Name:    "simplewiki",
 			URL:     "https://dumps.wikimedia.org/simplewiki/20260801/simplewiki-20260801-pages-articles.xml.bz2",
-			SHA256:  "",
-			Bytes:   334000000,
+			SHA256:  "6ae5a279226a3c16fc2eff45f632ed2ea635d0c02381774061e391bbf1a393d7",
+			Bytes:   354455715,
 			Licence: "CC BY-SA, free to redistribute with attribution",
 			Public:  true,
 			About: "every article of the Simple English Wikipedia, with the markup left on, " +

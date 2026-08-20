@@ -33,6 +33,14 @@ func TestDatasetsAreDescribed(t *testing.T) {
 		if d.Bytes <= 0 {
 			t.Errorf("dataset %q does not say how large the download is", d.Name)
 		}
+		// An unpinned corpus is not a measuring instrument. Two runs a month
+		// apart have to read the same bytes or the difference between them is
+		// not a fact about either engine, and an empty checksum here is only
+		// ever right for the few minutes between adding a dataset and
+		// downloading it once.
+		if len(d.SHA256) != 64 || strings.Trim(d.SHA256, "0123456789abcdef") != "" {
+			t.Errorf("dataset %q has %q where a lower case hex checksum should be", d.Name, d.SHA256)
+		}
 	}
 }
 
