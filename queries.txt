@@ -20,6 +20,16 @@ thread pool shutdown
 
 # Rare terms. The posting list is short and what is being measured is the
 # dictionary lookup and the cold read, not the scan.
+#
+# The two with an underscore in them are not comparable across engines and are
+# kept anyway. Every engine here splits on the underscore when it indexes, so
+# the documents are the same, but they disagree about what the query means:
+# some read the two halves as an OR and match thousands of documents, and some
+# read them as a phrase and match none. That is a real disagreement about a
+# real query shape, since internal jargon and product codenames are written
+# with underscores and people type them into search boxes, so it is worth
+# seeing rather than worth removing. Read the latency on these two lines as two
+# different questions being answered, not as one engine beating another.
 mmap_region
 kasan
 tsan_atomic

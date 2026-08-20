@@ -305,6 +305,11 @@ It runs no engines and opens no network connections, so it is safe to run on a l
 There are very common terms that match most of the corpus, ordinary two and three word queries, rare identifiers that match a handful of documents, prose terms that only appear in documentation, and one worst case single word.
 An engine that is quick on rare terms and slow on common ones has a different problem from one that is uniformly slow, and an average would hide both.
 
+Two lines of it are not comparable across engines and are kept anyway.
+`mmap_region` and `tsan_atomic` are split on the underscore by every engine here when it indexes, so they all hold the same documents, but they disagree about what the query means: some read the two halves as an OR and match thousands of documents, and some read them as a phrase and match none.
+That is a real disagreement about a real query shape, since internal jargon and product codenames are written with underscores and people type them into search boxes.
+The latency on those two lines is two different questions being answered rather than one engine beating another, and the file says so where somebody reading the query set will see it.
+
 ## Reading a result
 
 Two things are worth knowing before comparing numbers from two files.
