@@ -6,7 +6,7 @@
 # library and each runner is a thin binary on top of it.
 [workspace]
 resolver = "3"
-members = ["benchrs", "tantivy", "seekstorm", "exact", "turbovec", "hnsw", "csr", "petgraph"]
+members = ["benchrs", "kura", "tantivy", "seekstorm", "exact", "turbovec", "hnsw", "csr", "petgraph"]
 
 [workspace.package]
 version = "0.1.0"
