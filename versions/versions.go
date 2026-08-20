@@ -140,7 +140,15 @@ func check(ctx context.Context, client *http.Client, e Engine, repo Repo) Status
 		// Ours, pinned to a commit. The module proxy's idea of the latest
 		// version of a repository we push to several times a day is not a
 		// freshness signal, it is noise.
-		s.Pinned, s.Err = PinnedGoMod(repo.GoMod, e.Package)
+		//
+		// Where the pin is written down depends on what the engine is written
+		// in and not on whose it is, so the language decides which lock file
+		// is read.
+		if e.Language == "rust" {
+			s.Pinned, s.Err = pinnedCrate(repo.CargoLocks, e.Package)
+		} else {
+			s.Pinned, s.Err = PinnedGoMod(repo.GoMod, e.Package)
+		}
 		s.Latest = s.Pinned
 
 	case "none":
@@ -193,28 +201,65 @@ func pinnedCrate(locks []string, crate string) (string, error) {
 // The lock file is the right place to read rather than Cargo.toml, because the
 // manifest says 0.26 and the thing that actually got compiled into the binary
 // is 0.26.1.
+//
+// A crate taken from a git repository is pinned by its commit and not by its
+// version, since a version number in a repository we push to means nothing
+// until it is released. For those the commit is what comes back, because a
+// pin that never changes is not a pin.
 func PinnedCargoLock(path, crate string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 
-	var name, version string
+	var name, version, source string
+	done := func() (string, bool) {
+		if name != crate || version == "" {
+			return "", false
+		}
+		if rev, ok := gitRev(source); ok {
+			return rev, true
+		}
+		return version, true
+	}
+
 	for line := range strings.SplitSeq(string(b), "\n") {
 		line = strings.TrimSpace(line)
+		if line == "[[package]]" {
+			// The source comes after the version, so a block is only decided
+			// once the next one starts.
+			if v, ok := done(); ok {
+				return v, nil
+			}
+			name, version, source = "", "", ""
+			continue
+		}
 		switch {
-		case line == "[[package]]":
-			name, version = "", ""
 		case strings.HasPrefix(line, "name = "):
 			name = unquote(strings.TrimPrefix(line, "name = "))
 		case strings.HasPrefix(line, "version = "):
 			version = unquote(strings.TrimPrefix(line, "version = "))
-		}
-		if name == crate && version != "" {
-			return version, nil
+		case strings.HasPrefix(line, "source = "):
+			source = unquote(strings.TrimPrefix(line, "source = "))
 		}
 	}
+	if v, ok := done(); ok {
+		return v, nil
+	}
 	return "", fmt.Errorf("%s does not contain %s", path, crate)
+}
+
+// gitRev pulls the commit out of a lock file source line, which for a git
+// dependency ends in a fragment holding the resolved hash.
+func gitRev(source string) (string, bool) {
+	if !strings.HasPrefix(source, "git+") {
+		return "", false
+	}
+	hash, ok := strings.CutPrefix(source[strings.LastIndex(source, "#"):], "#")
+	if !ok || hash == "" {
+		return "", false
+	}
+	return hash, true
 }
 
 func unquote(s string) string {

@@ -120,7 +120,7 @@ jobs:
           # The three suites are kept apart by the suffix, the way they are in
           # bin/, because kura-bench, kura-vecbench and kura-graphbench each
           # pick up their own and none should ever run another's.
-          for r in tantivy-runner seekstorm-runner \
+          for r in kura-runner tantivy-runner seekstorm-runner \
                    exact-vecrunner turbovec-vecrunner hnsw-vecrunner \
                    csr-graphrunner petgraph-graphrunner; do
             cp "runners/rust/target/release/$r${{ matrix.ext }}" \

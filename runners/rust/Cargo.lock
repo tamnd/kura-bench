@@ -1689,6 +1689,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kura-core"
+version = "0.1.0"
+source = "git+https://github.com/tamnd/kura?rev=bf8b09c4717e784a1e447cf1b7596138a83d084f#bf8b09c4717e784a1e447cf1b7596138a83d084f"
+
+[[package]]
+name = "kura-runner"
+version = "0.1.0"
+dependencies = [
+ "benchrs",
+ "kura-core",
+ "memmap2",
+ "serde_json",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

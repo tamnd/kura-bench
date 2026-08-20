@@ -10,7 +10,7 @@ GO_RUNNERS := bleve sqlitefts genba
 # the engine's name in the report and the directory carries the suite it
 # belongs to.
 GO_GRAPHRUNNERS := sqlitegraph:sqlite
-RUST_RUNNERS := tantivy seekstorm
+RUST_RUNNERS := kura tantivy seekstorm
 RUST_VECRUNNERS := exact turbovec hnsw
 RUST_GRAPHRUNNERS := csr petgraph
 RUST := runners/rust
