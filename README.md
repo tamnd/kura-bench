@@ -43,7 +43,8 @@ Reindexing five thousand documents into an index that is already open and alread
 
 Relevance, where the corpus came with judgments.
 Every result carries the page each query returned and not only how many documents matched, so the answers can be scored against what people judged relevant.
-nDCG at 10, MRR at 10, recall at the depth the page was, and the share of returned documents anybody judged either way.
+nDCG at 10, MRR at 10, recall at the depth the page was, success at 1, and the share of returned documents anybody judged either way.
+Success at 1 is there because most enterprise search traffic is somebody who already knows which document they want, and for that person a relevant result at rank two is a failure that nDCG mostly forgives.
 The definitions are the ones trec_eval uses and there is a test that checks them against a run of trec_eval itself, because a relevance score that cannot be lined up against a published one is a score that only compares against itself.
 Every run also writes a file in the format trec_eval reads, so anybody who does not trust the arithmetic here can check it with the program everyone else uses.
 This runs on the passage collection, which arrives with a real query log and a judgment file, and it does not run on the source checkouts, because nobody has judged those queries and inventing judgments to have a number would be worse than having none.
@@ -351,7 +352,7 @@ An engine that returns the wrong ten documents in a tenth of the time has not wo
 ```
 make textset TEXTSET=msmarco
 make textbench TEXTSET=msmarco
-bin/kura-relevance -results results -runs runs
+bin/kura-relevance -results results -runs runs -out scores.json
 ```
 
 The passage collection is the corpus that makes this possible, because it comes with a query log and a judgment file rather than only documents.
@@ -363,6 +364,16 @@ Judged coverage is the share of returned documents anybody looked at, and when i
 
 `-runs` writes a run file per engine in the format every existing evaluation tool reads.
 That is there so somebody who does not believe these numbers can check them with a different program, which is the property that makes them worth reporting at all.
+
+`-out` writes the scores as JSON, and `-baseline` checks a fresh scores file against an earlier one and exits nonzero when nDCG has fallen by more than the tolerance.
+
+```
+bin/kura-relevance -results results -out scores.json -baseline baseline/msmarco.json
+```
+
+The tolerance lives in the baseline file rather than on the command line, because it describes how much these particular numbers move between two runs that changed nothing, and the only way to know that is to run the same benchmark several times and look at the spread.
+A baseline with no tolerance in it is refused rather than treated as a demand for identical scores, since a gate that fails on noise is a gate people learn to ignore.
+There is no baseline committed here yet, because measuring that spread needs the passage collection to have run more than once on one machine, and until it has, any number put in that field would be a guess wearing the clothes of a measurement.
 
 ## Reading a result
 

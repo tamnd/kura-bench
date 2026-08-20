@@ -31,15 +31,37 @@ func main() {
 	queries := flag.String("queries", "queries.dev.small.tsv", "the query log the judgments refer to, so query text maps back to a query id")
 	runs := flag.String("runs", "", "directory to write a run file per engine, for checking these numbers with another tool")
 	depth := flag.Int("k", 10, "the depth every metric is computed at")
+	out := flag.String("out", "", "file to write the scores to as JSON, which is what a baseline is made of")
+	baseline := flag.String("baseline", "", "a scores file from an earlier run to check this one against, failing if nDCG dropped by more than the tolerance recorded in it")
 	flag.Parse()
 
-	if err := run(*results, *qrels, *queries, *runs, *depth); err != nil {
+	cfg := config{
+		results:  *results,
+		qrels:    *qrels,
+		queries:  *queries,
+		runsDir:  *runs,
+		depth:    *depth,
+		out:      *out,
+		baseline: *baseline,
+	}
+	if err := run(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, "kura-relevance:", err)
 		os.Exit(1)
 	}
 }
 
-func run(results, qrelsPath, queriesPath, runsDir string, depth int) error {
+type config struct {
+	results  string
+	qrels    string
+	queries  string
+	runsDir  string
+	depth    int
+	out      string
+	baseline string
+}
+
+func run(cfg config) error {
+	results, qrelsPath, queriesPath, runsDir, depth := cfg.results, cfg.qrels, cfg.queries, cfg.runsDir, cfg.depth
 	judgments, err := relevance.ReadQrelsFile(qrelsPath)
 	if err != nil {
 		return err
@@ -84,20 +106,68 @@ func run(results, qrelsPath, queriesPath, runsDir string, depth int) error {
 		return fmt.Errorf("nothing in %s carries the pages an engine returned, so there is nothing to score", results)
 	}
 
-	fmt.Printf("%-14s %8s %8s %8s %8s %9s %9s\n",
-		"engine", "nDCG@"+itoa(depth), "MRR@"+itoa(depth), "recall", "judged", "queries", "unjudged")
+	fmt.Printf("%-14s %8s %8s %8s %8s %8s %9s %9s\n",
+		"engine", "nDCG@"+itoa(depth), "MRR@"+itoa(depth), "recall", "succ@1", "judged", "queries", "unjudged")
 	for _, r := range rows {
-		fmt.Printf("%-14s %8.4f %8.4f %8.4f %7.1f%% %9d %9d\n",
-			r.engine, r.scores.NDCG, r.scores.MRR, r.scores.Recall,
+		fmt.Printf("%-14s %8.4f %8.4f %8.4f %8.4f %7.1f%% %9d %9d\n",
+			r.engine, r.scores.NDCG, r.scores.MRR, r.scores.Recall, r.scores.Success,
 			r.scores.Coverage*100, r.scores.Queries, r.scores.Unjudged)
 	}
 
 	fmt.Println()
 	fmt.Printf("Recall is at %d and not at the hundred a paper would quote, because that is\n", depth)
 	fmt.Println("the size of the page the runners return. The two are not comparable.")
+	fmt.Println("Success at 1 is the share of queries whose first result was relevant, which is")
+	fmt.Println("what somebody looking for a document they already know about experiences.")
 	fmt.Println("Judged is the share of returned documents anybody looked at. A low number")
 	fmt.Println("means the scores are mostly measuring how much this engine agrees with the")
 	fmt.Println("systems that were in the pool when the judgments were made.")
+
+	report := relevance.Report{Qrels: qrelsPath, Queries: queriesPath}
+	for _, r := range rows {
+		report.Add(r.engine, r.scores)
+	}
+	if cfg.out != "" {
+		if err := report.WriteFile(cfg.out); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "\nwrote %s\n", cfg.out)
+	}
+	if cfg.baseline != "" {
+		return compare(cfg.baseline, report)
+	}
+	return nil
+}
+
+// compare is the gate. It returns an error when a score fell further than the
+// baseline says these numbers move on their own, which is what makes the exit
+// status usable from CI.
+func compare(path string, now relevance.Report) error {
+	was, err := relevance.ReadReport(path)
+	if err != nil {
+		return err
+	}
+	changes, err := relevance.Compare(was, now)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("\nagainst %s, tolerance %.4f\n", path, *was.Tolerance)
+	bad := 0
+	for _, c := range changes {
+		switch {
+		case c.Missing:
+			fmt.Printf("%-14s %8.4f       -- not measured in this run\n", c.Engine, c.Baseline)
+		case c.Regressed:
+			bad++
+			fmt.Printf("%-14s %8.4f -> %8.4f  %+.4f  regressed\n", c.Engine, c.Baseline, c.Now, c.Now-c.Baseline)
+		default:
+			fmt.Printf("%-14s %8.4f -> %8.4f  %+.4f\n", c.Engine, c.Baseline, c.Now, c.Now-c.Baseline)
+		}
+	}
+	if bad > 0 {
+		return fmt.Errorf("%d engines scored worse than the baseline by more than %.4f", bad, *was.Tolerance)
+	}
 	return nil
 }
 

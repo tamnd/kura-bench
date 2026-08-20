@@ -69,6 +69,23 @@ func TestAGradedJudgmentWeighsMoreThanABinaryOne(t *testing.T) {
 	near(t, "swapping equals", swapped.NDCG, 1)
 }
 
+// Success at one is the one metric here that gives no credit for a near miss,
+// which is the point of it. For somebody who already knows which document they
+// want, a relevant result at rank two is a failure they notice.
+func TestSuccessAtOneOnlyCountsTheTopResult(t *testing.T) {
+	qrels := Qrels{"1": {"a": 1}, "2": {"a": 1}}
+
+	got := Score([]Query{
+		{ID: "1", IDs: []string{"a", "x"}},
+		{ID: "2", IDs: []string{"x", "a"}},
+	}, qrels, 10)
+
+	near(t, "success@1", got.Success, 0.5)
+	// MRR gives the second query half credit for the same page, which is the
+	// difference between the two metrics and the reason both are reported.
+	near(t, "MRR", got.MRR, 0.75)
+}
+
 func TestAPageWithNothingRelevantScoresZeroWithoutFailing(t *testing.T) {
 	qrels := Qrels{"1": {"a": 1}}
 	got := Score([]Query{{ID: "1", IDs: []string{"x", "y"}}}, qrels, 10)
@@ -207,29 +224,23 @@ func near(t *testing.T, what string, got, want float64) {
 // every retrieval paper is checked against. The fixture next to this file is
 // the input it was given:
 //
-//	trec_eval -m ndcg_cut.10 -m recip_rank -m recall.10 \
+//	trec_eval -m ndcg_cut.10 -m recip_rank -m recall.10 -m success.1 \
 //	        relevance/testdata/reference.qrels relevance/testdata/reference.run
 //
 // It was version 10.0-rc3. The fixture is deliberately awkward: a graded query
 // with an unjudged document at the top of the page, a judgment of zero, a
 // relevant document that was never retrieved, a query whose only hit is third,
-// and a query where nothing relevant came back at all.
+// a query where nothing relevant came back at all, and one where the top result
+// is relevant so that success at one is not trivially zero everywhere.
 func TestOurArithmeticAgreesWithTrecEval(t *testing.T) {
 	qrels, err := ReadQrelsFile(filepath.Join("testdata", "reference.qrels"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// The same three pages the run file holds, in the same order.
-	queries := []Query{
-		{ID: "q1", IDs: []string{"d5", "d1", "d3", "d2"}},
-		{ID: "q2", IDs: []string{"d8", "d6", "d4"}},
-		{ID: "q3", IDs: []string{"d11", "d12", "d13"}},
-	}
-
-	got := Score(queries, qrels, 10)
-	if got.Queries != 3 || got.Unjudged != 0 {
-		t.Fatalf("scored %d queries with %d unjudged, want 3 and 0", got.Queries, got.Unjudged)
+	got := Score(referencePages(), qrels, 10)
+	if got.Queries != 4 || got.Unjudged != 0 {
+		t.Fatalf("scored %d queries with %d unjudged, want 4 and 0", got.Queries, got.Unjudged)
 	}
 	// trec_eval prints four decimal places, so that is the agreement asked for.
 	for _, c := range []struct {
@@ -237,9 +248,10 @@ func TestOurArithmeticAgreesWithTrecEval(t *testing.T) {
 		got  float64
 		want float64
 	}{
-		{"nDCG@10", got.NDCG, 0.2260},
-		{"MRR@10", got.MRR, 0.2778},
-		{"recall@10", got.Recall, 0.3889},
+		{"nDCG@10", got.NDCG, 0.2745},
+		{"MRR@10", got.MRR, 0.4583},
+		{"recall@10", got.Recall, 0.4583},
+		{"success@1", got.Success, 0.2500},
 	} {
 		if math.Abs(c.got-c.want) > 0.00005 {
 			t.Errorf("%s is %.4f, trec_eval says %.4f", c.name, c.got, c.want)
@@ -257,15 +269,22 @@ func TestTheRunFileMatchesTheOneTrecEvalWasGiven(t *testing.T) {
 	}
 
 	var b strings.Builder
-	err = WriteRun(&b, "kura-bench", []Query{
-		{ID: "q1", IDs: []string{"d5", "d1", "d3", "d2"}},
-		{ID: "q2", IDs: []string{"d8", "d6", "d4"}},
-		{ID: "q3", IDs: []string{"d11", "d12", "d13"}},
-	})
-	if err != nil {
+	if err := WriteRun(&b, "kura-bench", referencePages()); err != nil {
 		t.Fatal(err)
 	}
 	if b.String() != string(want) {
 		t.Errorf("the run file this package writes is no longer the fixture trec_eval read:\ngot:\n%swant:\n%s", b.String(), want)
+	}
+}
+
+// The pages the run file holds, in the order it holds them. Both tests above
+// use this, so neither can drift away from the file trec_eval was given without
+// the other noticing.
+func referencePages() []Query {
+	return []Query{
+		{ID: "q1", IDs: []string{"d5", "d1", "d3", "d2"}},
+		{ID: "q2", IDs: []string{"d8", "d6", "d4"}},
+		{ID: "q3", IDs: []string{"d11", "d12", "d13"}},
+		{ID: "q4", IDs: []string{"d20", "d22", "d21"}},
 	}
 }

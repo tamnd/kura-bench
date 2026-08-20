@@ -164,6 +164,19 @@ type Scores struct {
 	MRR    float64
 	Recall float64
 
+	// Success is the share of queries whose very first result was relevant.
+	//
+	// It is the crudest metric here and the closest one to what a user
+	// experiences. Most enterprise search traffic is somebody who already knows
+	// which document they want and is using search to open it, and for that
+	// person the second result is a failure. nDCG will not show that, because it
+	// gives most of the credit back for a good result at rank two.
+	//
+	// It is also the right metric for judgments derived from behaviour, which
+	// are positive only and have no grades, so a position weighted graded score
+	// computed over them is arithmetic performed on nothing.
+	Success float64
+
 	// Coverage is the share of returned documents that were judged either way.
 	// A low number means the score is mostly measuring whether this engine
 	// happens to return what the systems in the judging pool returned, and it
@@ -235,12 +248,16 @@ func Score(queries []Query, qrels Qrels, k int) Scores {
 		if total := countRelevant(grades); total > 0 {
 			out.Recall += float64(hit) / float64(total)
 		}
+		if len(page) > 0 && grades[page[0]] > 0 {
+			out.Success++
+		}
 	}
 
 	if out.Queries > 0 {
 		out.NDCG /= float64(out.Queries)
 		out.MRR /= float64(out.Queries)
 		out.Recall /= float64(out.Queries)
+		out.Success /= float64(out.Queries)
 	}
 	if returned > 0 {
 		out.Coverage = float64(judged) / float64(returned)

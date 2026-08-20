@@ -211,9 +211,17 @@ textbench: build textqueries
 
 # Scores the answers rather than the latency, which only works on a corpus that
 # came with judgments. Today that is the passage collection.
+#
+# It writes the run files that let another tool check the arithmetic and a JSON
+# file of the scores. Point BASELINE at an earlier scores file to fail the target
+# when a score has fallen further than the tolerance recorded in that file.
+SCORES ?= scores.json
+BASELINE ?=
+
 .PHONY: relevance
 relevance: $(BIN)/kura-relevance
-	$(BIN)/kura-relevance -results results -qrels qrels.dev.small.tsv -queries queries.dev.small.tsv -runs runs
+	$(BIN)/kura-relevance -results results -qrels qrels.dev.small.tsv -queries queries.dev.small.tsv \
+		-runs runs -out $(SCORES) $(if $(BASELINE),-baseline $(BASELINE))
 
 .PHONY: bench
 bench: build
