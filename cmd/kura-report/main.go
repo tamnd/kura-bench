@@ -104,7 +104,18 @@ func run(dir string) error {
 			if len(probe.Dataset) > 0 {
 				return fmt.Errorf("%s: this is not a text result, it has a dataset in it", path)
 			}
+			// The corpus is in the key for the same reason it is in the vector
+			// key above. One machine that ran two corpora produced two sets of
+			// results whose numbers have nothing to do with each other, and a
+			// key without the corpus puts them in one table.
+			//
+			// A result written before the run block existed does not know its
+			// corpus and keeps the old key, so the results already committed
+			// still rebuild into the report they were written as.
 			key := "report-" + slug(r.Machine.Host)
+			if r.Run != nil && r.Run.Corpus != "" {
+				key = "report-" + corpusSlug(r.Run.Corpus) + "-" + slug(r.Machine.Host)
+			}
 			text[key] = append(text[key], r)
 		}
 	}
@@ -216,6 +227,13 @@ func write(dir, key, body string, engines int) error {
 // a number changed.
 func sortBy[T any](rs []T, key func(T) string) {
 	sort.SliceStable(rs, func(i, j int) bool { return key(rs[i]) < key(rs[j]) })
+}
+
+// corpusSlug is the corpus part of a file name, matching what kura-bench
+// writes, so that rebuilding a report lands on the file the run produced.
+func corpusSlug(path string) string {
+	base := filepath.Base(path)
+	return slug(strings.TrimSuffix(base, filepath.Ext(base)))
 }
 
 // slug is the same mapping the orchestrators use for a file name, since this

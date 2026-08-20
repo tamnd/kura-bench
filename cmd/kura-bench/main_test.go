@@ -150,3 +150,28 @@ func TestARestrictedCorpusLosesTheDocumentsAndKeepsTheNumbers(t *testing.T) {
 		t.Error("the original was modified in place")
 	}
 }
+
+// Two corpora on one machine used to write to the same file, so the second run
+// replaced the first without saying anything. It happened, and git is the only
+// reason the first one still exists.
+func TestTheCorpusIsInTheResultFileName(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"enron.jsonl", "enron"},
+		{"/root/bench/enron.jsonl", "enron"},
+		{"corpus.jsonl", "corpus"},
+		{"msmarco-100k.jsonl", "msmarco-100k"},
+		{"Simple Wiki.jsonl", "simple-wiki"},
+		{"", "unknown"},
+	}
+	for _, c := range cases {
+		if got := corpusSlug(c.path); got != c.want {
+			t.Errorf("corpusSlug(%q) = %q, want %q", c.path, got, c.want)
+		}
+	}
+	if corpusSlug("enron.jsonl") == corpusSlug("corpus.jsonl") {
+		t.Error("two corpora still collide")
+	}
+}

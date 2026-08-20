@@ -146,7 +146,7 @@ func run(cfg config) error {
 		}
 		results = append(results, res)
 
-		name := filepath.Join(cfg.out, r.name+"-"+hostSlug(res.Machine.Host)+".json")
+		name := filepath.Join(cfg.out, r.name+"-"+corpusSlug(cfg.corpus)+"-"+hostSlug(res.Machine.Host)+".json")
 		if err := writeJSON(name, res); err != nil {
 			return err
 		}
@@ -156,7 +156,7 @@ func run(cfg config) error {
 		return errors.New("every engine failed")
 	}
 
-	report := filepath.Join(cfg.out, "report-"+hostSlug(results[0].Machine.Host)+".md")
+	report := filepath.Join(cfg.out, "report-"+corpusSlug(cfg.corpus)+"-"+hostSlug(results[0].Machine.Host)+".md")
 	body := header(cfg, results[0]) + bench.Report(results)
 	if err := os.WriteFile(report, []byte(body), 0o644); err != nil {
 		return err
@@ -423,6 +423,30 @@ func hostSlug(host string) string {
 	if host == "" {
 		return "unknown"
 	}
+	return slug(host)
+}
+
+// corpusSlug is the corpus in the file name.
+//
+// It is there because without it two corpora on one machine write to the same
+// file, and the second run silently replaces the first. That is not a
+// hypothetical: a run over the mail corpus overwrote the committed results from
+// the source corpus on the first machine it was tried on, and the only reason
+// it was noticed is that git had the old ones.
+//
+// The name comes from the corpus file rather than from the label, because a
+// corpus assembled by hand has no label and still needs a name that is not the
+// same as everything else's.
+func corpusSlug(path string) string {
+	base := filepath.Base(path)
+	base = strings.TrimSuffix(base, filepath.Ext(base))
+	if base == "" || base == "." {
+		return "unknown"
+	}
+	return slug(base)
+}
+
+func slug(s string) string {
 	return strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
@@ -431,5 +455,5 @@ func hostSlug(host string) string {
 			return r + 32
 		}
 		return '-'
-	}, host)
+	}, s)
 }
