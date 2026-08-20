@@ -178,6 +178,17 @@ type QueryStat struct {
 	P90MS    float64 `json:"p90_ms"`
 	P99MS    float64 `json:"p99_ms"`
 	MaxMS    float64 `json:"max_ms"`
+
+	// IDs is the page the engine returned, in the order it returned it. It
+	// comes from the warm up run rather than a timed one, so collecting it
+	// costs nothing a timing sees.
+	//
+	// Two things need it. A relevance score needs to know what came back and
+	// not just how many, and a latency comparison needs a way to check that two
+	// engines answered the same question, which the total alone does not
+	// establish. An engine can report the same total and return a different
+	// page, and until this field existed there was no way to see that.
+	IDs []string `json:"ids,omitempty"`
 }
 
 // ConcurrentStat is the query set run with several in flight.

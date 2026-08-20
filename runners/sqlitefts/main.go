@@ -114,7 +114,7 @@ func (e *engine) Flush() error {
 	return err
 }
 
-func (e *engine) Search(ctx context.Context, query string, limit int) (int, error) {
+func (e *engine) Search(ctx context.Context, query string, limit int, ids *[]string) (int, error) {
 	match := matchExpression(query)
 	if match == "" {
 		return 0, nil
@@ -141,6 +141,9 @@ func (e *engine) Search(ctx context.Context, query string, limit int) (int, erro
 		var id, title string
 		if err := rows.Scan(&id, &title); err != nil {
 			return 0, err
+		}
+		if ids != nil {
+			*ids = append(*ids, id)
 		}
 	}
 	return total, rows.Err()

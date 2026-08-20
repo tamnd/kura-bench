@@ -100,7 +100,7 @@ func (e *engine) Flush() error {
 	return e.idx.Close()
 }
 
-func (e *engine) Search(ctx context.Context, query string, limit int) (int, error) {
+func (e *engine) Search(ctx context.Context, query string, limit int, ids *[]string) (int, error) {
 	// Title and body, named. The composite _all field is off in the mapping,
 	// and a match query with no field goes to _all, so an unnamed query here
 	// searches a field that was never written and returns nothing at all.
@@ -128,6 +128,11 @@ func (e *engine) Search(ctx context.Context, query string, limit int) (int, erro
 	res, err := e.idx.SearchInContext(ctx, req)
 	if err != nil {
 		return 0, err
+	}
+	if ids != nil {
+		for _, hit := range res.Hits {
+			*ids = append(*ids, hit.ID)
+		}
 	}
 	return int(res.Total), nil
 }

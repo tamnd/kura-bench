@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -92,7 +93,14 @@ type Engine interface {
 
 	// Search runs one query and returns how many documents matched in total,
 	// which is not the same as how many were returned.
-	Search(ctx context.Context, query string, limit int) (int, error)
+	//
+	// When ids is not nil the engine appends the identifiers of the page it
+	// returned, in the order it returned them. Every engine here already
+	// fetches those documents, because a result nobody can show is not a
+	// result, so this asks for a field out of one that is already in hand and
+	// not for extra work. The harness only passes a slice on a run it is not
+	// timing.
+	Search(ctx context.Context, query string, limit int, ids *[]string) (int, error)
 
 	// Close releases everything.
 	Close() error
@@ -285,7 +293,7 @@ func queryPhase(cfg Config, eng Engine, res *bench.Result) error {
 	if err := eng.Open(cfg.Work); err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
-	if _, err := eng.Search(ctx, queries[0], 10); err != nil {
+	if _, err := eng.Search(ctx, queries[0], 10, nil); err != nil {
 		return fmt.Errorf("the first query after open: %w", err)
 	}
 	openUsage := bench.Measure(openStart)
@@ -293,24 +301,31 @@ func queryPhase(cfg Config, eng Engine, res *bench.Result) error {
 
 	searchStart := bench.Take()
 	stats := make([]bench.QueryStat, 0, len(queries))
+	ids := make([]string, 0, 10)
 	for _, q := range queries {
 		// One warm up that is not counted, because the first run of a query
 		// pays for whatever the engine caches per term and no deployment sees
 		// that cost on every request.
-		hits, err := eng.Search(ctx, q, 10)
+		//
+		// The page comes off this run for the same reason. Keeping the
+		// identifiers allocates, and the run that pays for it is the one whose
+		// time nobody reads.
+		ids = ids[:0]
+		hits, err := eng.Search(ctx, q, 10, &ids)
 		if err != nil {
 			return fmt.Errorf("query %q: %w", q, err)
 		}
 		runs := make([]time.Duration, 0, cfg.Repeat)
 		for range cfg.Repeat {
 			t := time.Now()
-			hits, err = eng.Search(ctx, q, 10)
+			hits, err = eng.Search(ctx, q, 10, nil)
 			if err != nil {
 				return fmt.Errorf("query %q: %w", q, err)
 			}
 			runs = append(runs, time.Since(t))
 		}
 		stat := bench.Summarise(q, hits, runs)
+		stat.IDs = slices.Clone(ids)
 		stats = append(stats, stat)
 		// One line per query rather than per run, so a slow engine says where
 		// it has got to instead of looking hung for an hour. It is printed
@@ -433,7 +448,7 @@ func concurrent(ctx context.Context, eng Engine, queries []string, cfg Config) *
 			defer wg.Done()
 			for q := range jobs {
 				t := time.Now()
-				_, err := eng.Search(ctx, q, 10)
+				_, err := eng.Search(ctx, q, 10, nil)
 				d := time.Since(t)
 				mu.Lock()
 				if err != nil && bad == nil {

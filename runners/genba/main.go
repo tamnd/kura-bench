@@ -113,13 +113,18 @@ func (e *engine) AddBatch(docs []corpus.Document) error {
 // disk, and sleeping here to look busy would be a fake number.
 func (e *engine) Flush() error { return nil }
 
-func (e *engine) Search(ctx context.Context, query string, limit int) (int, error) {
+func (e *engine) Search(ctx context.Context, query string, limit int, ids *[]string) (int, error) {
 	res, err := e.searcher.Search(ctx, e.principal, index.Query{
 		Text:  query,
 		Limit: limit,
 	})
 	if err != nil {
 		return 0, err
+	}
+	if ids != nil {
+		for _, hit := range res.Hits {
+			*ids = append(*ids, hit.Document.ID)
+		}
 	}
 	return res.Total, nil
 }

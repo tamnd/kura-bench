@@ -14,7 +14,7 @@ use benchrs::{SEARCH_LIMIT, UPDATE_DOCUMENTS, config, corpus, machine, result, u
 
 use tantivy::collector::{Count, TopDocs};
 use tantivy::query::QueryParser;
-use tantivy::schema::{Field, STORED, STRING, Schema, TEXT};
+use tantivy::schema::{Field, STORED, STRING, Schema, TEXT, Value as _};
 use tantivy::{Index, IndexWriter, TantivyDocument};
 
 // There is no batch size constant here. The Go engines are handed documents in
@@ -175,7 +175,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     let reader = index.reader()?;
     let parser = QueryParser::for_index(&index, vec![fields.title, fields.body]);
     let searcher = reader.searcher();
-    search_once(&searcher, &parser, &queries[0], SEARCH_LIMIT)?;
+    search_once(&searcher, &parser, &queries[0], SEARCH_LIMIT, None)?;
     let open = usage::measure(&open_start);
     res.open = result::OpenPhase {
         resident_bytes: open.rss_bytes,
@@ -184,18 +184,26 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
 
     let search_start = usage::take();
     let mut stats = Vec::with_capacity(queries.len());
+    let mut ids = Vec::with_capacity(SEARCH_LIMIT);
     for q in &queries {
         // One warm up that is not counted, because the first run of a query
         // pays for whatever the engine caches per term and no deployment sees
         // that cost on every request.
-        let mut hits = search_once(&searcher, &parser, q, SEARCH_LIMIT)?;
+        //
+        // The page comes off this run for the same reason. Keeping the
+        // identifiers allocates, and the run that pays for it is the one whose
+        // time nobody reads.
+        ids.clear();
+        let mut hits = search_once(&searcher, &parser, q, SEARCH_LIMIT, Some(&mut ids))?;
         let mut runs = Vec::with_capacity(cfg.repeat);
         for _ in 0..cfg.repeat {
             let t = Instant::now();
-            hits = search_once(&searcher, &parser, q, SEARCH_LIMIT)?;
+            hits = search_once(&searcher, &parser, q, SEARCH_LIMIT, None)?;
             runs.push(t.elapsed().as_secs_f64() * 1000.0);
         }
-        stats.push(result::summarise(q, hits, runs));
+        let mut stat = result::summarise(q, hits, runs);
+        stat.ids.clone_from(&ids);
+        stats.push(stat);
     }
     let search = usage::measure(&search_start);
 
@@ -225,11 +233,17 @@ fn existing_fields(index: &Index) -> Result<Fields, Box<dyn std::error::Error>> 
 /// same as the number returned. Both collectors run because the other engines
 /// here report a total and a page, and dropping one would make the numbers
 /// describe different work.
+///
+/// `ids` collects the identifiers of the page when it is given. The documents
+/// are fetched either way, so the only extra work is reading a field out of one
+/// that is already in hand, and the schema lookup that finds it happens on the
+/// warm up run alone.
 fn search_once(
     searcher: &tantivy::Searcher,
     parser: &QueryParser,
     query: &str,
     limit: usize,
+    ids: Option<&mut Vec<String>>,
 ) -> tantivy::Result<usize> {
     // A bare query is read as OR, which is how every other engine here is asked
     // to read it. Tantivy's parser defaults to that already and it is set
@@ -242,8 +256,19 @@ fn search_once(
         &parsed,
         &(Count, TopDocs::with_limit(limit).order_by_score()),
     )?;
+    let id = match &ids {
+        Some(_) => searcher.schema().get_field("id").ok(),
+        None => None,
+    };
+    let mut ids = ids;
     for (_score, address) in top {
-        let _doc: TantivyDocument = searcher.doc(address)?;
+        let doc: TantivyDocument = searcher.doc(address)?;
+        if let Some(field) = id
+            && let Some(out) = ids.as_deref_mut()
+            && let Some(text) = doc.get_first(field).and_then(|v| v.as_str())
+        {
+            out.push(text.to_string());
+        }
     }
     Ok(count)
 }
@@ -289,7 +314,7 @@ fn concurrent_phase(
                 let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 let Some(q) = jobs.get(i) else { break };
                 let t = Instant::now();
-                if search_once(&searcher, &parser, q, SEARCH_LIMIT).is_err() {
+                if search_once(&searcher, &parser, q, SEARCH_LIMIT, None).is_err() {
                     return None;
                 }
                 times.push(t.elapsed().as_secs_f64() * 1000.0);

@@ -33,7 +33,7 @@ GRAPH ?= ca-grqc
 all: build
 
 .PHONY: build
-build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-queries $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench $(BIN)/kura-report go-runners rust-runners
+build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-queries $(BIN)/kura-relevance $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench $(BIN)/kura-report go-runners rust-runners
 
 $(BIN)/kura-bench: $(shell find cmd/kura-bench bench -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-bench
@@ -43,6 +43,9 @@ $(BIN)/kura-corpus: $(shell find cmd/kura-corpus corpus -name '*.go')
 
 $(BIN)/kura-queries: $(shell find cmd/kura-queries corpus -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-queries
+
+$(BIN)/kura-relevance: $(shell find cmd/kura-relevance relevance bench -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-relevance
 
 $(BIN)/kura-vectors: $(shell find cmd/kura-vectors vectors -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-vectors
@@ -168,6 +171,12 @@ textqueries: $(BIN)/kura-queries
 .PHONY: textbench
 textbench: build textqueries
 	$(BIN)/kura-bench -corpus $(TEXTSET).jsonl -queries queries-$(TEXTSET).txt -bin $(BIN) -out results
+
+# Scores the answers rather than the latency, which only works on a corpus that
+# came with judgments. Today that is the passage collection.
+.PHONY: relevance
+relevance: $(BIN)/kura-relevance
+	$(BIN)/kura-relevance -results results -qrels qrels.dev.small.tsv -queries queries.dev.small.tsv -runs runs
 
 .PHONY: bench
 bench: build

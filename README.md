@@ -41,6 +41,11 @@ Throughput in queries per second with a configurable number of workers, which is
 Incremental update.
 Reindexing five thousand documents into an index that is already open and already being searched, and what that does to the size on disk.
 
+Relevance, where the corpus came with judgments.
+Every result carries the page each query returned and not only how many documents matched, so the answers can be scored against what people judged relevant.
+nDCG at 10, MRR at 10, recall at the depth the page was, and the share of returned documents anybody judged either way.
+This runs on the passage collection, which arrives with a real query log and a judgment file, and it does not run on the source checkouts, because nobody has judged those queries and inventing judgments to have a number would be worse than having none.
+
 Machine.
 Every result carries the host, the CPU, the core count, the memory, the load average before the run started and the free memory at that moment.
 A run on a machine that was already busy is marked as not dedicated, and the report says so, because a number taken on a loaded box is worth reporting and is not worth comparing.
@@ -324,6 +329,28 @@ It reads the corpus, counts how many documents each term is in, and picks from f
 Terms tied on frequency are walked at a stride rather than taken adjacently, so a band does not come out as three words that happen to sit next to each other in the dictionary.
 It also picks a few two word queries from adjacent pairs where both halves are common, since a query that is cheap word by word and expensive together is the case an engine either skips through or does not.
 The header of a generated file says it was constructed rather than logged, because a constructed query set tells you about latency and nothing about relevance.
+
+## Scoring the answers
+
+A latency number says how fast an engine answered.
+It does not say whether it answered.
+An engine that returns the wrong ten documents in a tenth of the time has not won anything, and a table of medians is the easiest place in the world to hide that.
+
+```
+make textset TEXTSET=msmarco
+make textbench TEXTSET=msmarco
+bin/kura-relevance -results results -runs runs
+```
+
+The passage collection is the corpus that makes this possible, because it comes with a query log and a judgment file rather than only documents.
+The runners report the identifiers of the page they returned alongside the timings, collected on the warm up run so that no timed run pays for it, and the scorer matches those against the judgments.
+
+Two things it prints are worth reading before the scores.
+Recall is at the depth of the page, which is ten, and not the hundred a paper quotes, so it is a much harder number and the two are not comparable.
+Judged coverage is the share of returned documents anybody looked at, and when it is low the scores are mostly measuring how much an engine agrees with the systems that were in the pool when the judgments were made, rather than how good it is.
+
+`-runs` writes a run file per engine in the format every existing evaluation tool reads.
+That is there so somebody who does not believe these numbers can check them with a different program, which is the property that makes them worth reporting at all.
 
 ## Reading a result
 
