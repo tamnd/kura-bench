@@ -2,6 +2,8 @@ package relevance
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -45,20 +47,26 @@ func TestTheMetricsMatchTheArithmetic(t *testing.T) {
 }
 
 func TestAGradedJudgmentWeighsMoreThanABinaryOne(t *testing.T) {
-	// A grade of three is worth 2^3-1 = 7, a grade of one is worth 1. Putting
-	// the highly relevant document second rather than first has to cost more
-	// than swapping two equally relevant ones would.
+	// The gain is the grade, so a grade of three is worth three times a grade
+	// of one. Putting the highly relevant document second rather than first has
+	// to cost more than swapping two equally relevant ones would.
 	qrels := Qrels{"1": {"a": 3, "b": 1}}
 
 	right := Score([]Query{{ID: "1", IDs: []string{"a", "b"}}}, qrels, 10)
 	wrong := Score([]Query{{ID: "1", IDs: []string{"b", "a"}}}, qrels, 10)
 
 	near(t, "the ideal order", right.NDCG, 1)
-	// DCG of the wrong order is 1/log2(2) + 7/log2(3), ideal is 7 + 1/log2(3).
-	near(t, "the wrong order", wrong.NDCG, (1+7/math.Log2(3))/(7+1/math.Log2(3)))
+	// DCG of the wrong order is 1/log2(2) + 3/log2(3), ideal is 3 + 1/log2(3).
+	near(t, "the wrong order", wrong.NDCG, (1+3/math.Log2(3))/(3+1/math.Log2(3)))
 	if wrong.NDCG >= right.NDCG {
 		t.Fatal("putting the best document second scored no worse than putting it first")
 	}
+
+	// The same swap with two equally relevant documents costs nothing at all,
+	// which is what makes the cost above attributable to the grades.
+	flat := Qrels{"1": {"a": 1, "b": 1}}
+	swapped := Score([]Query{{ID: "1", IDs: []string{"b", "a"}}}, flat, 10)
+	near(t, "swapping equals", swapped.NDCG, 1)
 }
 
 func TestAPageWithNothingRelevantScoresZeroWithoutFailing(t *testing.T) {
@@ -183,5 +191,81 @@ func near(t *testing.T, what string, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-9 {
 		t.Errorf("%s is %v, want %v", what, got, want)
+	}
+}
+
+// The one test here that does not check our arithmetic against our own
+// arithmetic.
+//
+// Everybody who has written their own nDCG has got it wrong at least once, and
+// the ways to get it wrong all produce plausible numbers: the wrong gain, the
+// wrong logarithm, an ideal ranking taken from the page instead of from the
+// judgments, a cutoff applied to one of those and not the other. None of that
+// shows up in a test whose expected value came from the same code.
+//
+// So the expected values below came out of trec_eval, which is the reference
+// every retrieval paper is checked against. The fixture next to this file is
+// the input it was given:
+//
+//	trec_eval -m ndcg_cut.10 -m recip_rank -m recall.10 \
+//	        relevance/testdata/reference.qrels relevance/testdata/reference.run
+//
+// It was version 10.0-rc3. The fixture is deliberately awkward: a graded query
+// with an unjudged document at the top of the page, a judgment of zero, a
+// relevant document that was never retrieved, a query whose only hit is third,
+// and a query where nothing relevant came back at all.
+func TestOurArithmeticAgreesWithTrecEval(t *testing.T) {
+	qrels, err := ReadQrelsFile(filepath.Join("testdata", "reference.qrels"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The same three pages the run file holds, in the same order.
+	queries := []Query{
+		{ID: "q1", IDs: []string{"d5", "d1", "d3", "d2"}},
+		{ID: "q2", IDs: []string{"d8", "d6", "d4"}},
+		{ID: "q3", IDs: []string{"d11", "d12", "d13"}},
+	}
+
+	got := Score(queries, qrels, 10)
+	if got.Queries != 3 || got.Unjudged != 0 {
+		t.Fatalf("scored %d queries with %d unjudged, want 3 and 0", got.Queries, got.Unjudged)
+	}
+	// trec_eval prints four decimal places, so that is the agreement asked for.
+	for _, c := range []struct {
+		name string
+		got  float64
+		want float64
+	}{
+		{"nDCG@10", got.NDCG, 0.2260},
+		{"MRR@10", got.MRR, 0.2778},
+		{"recall@10", got.Recall, 0.3889},
+	} {
+		if math.Abs(c.got-c.want) > 0.00005 {
+			t.Errorf("%s is %.4f, trec_eval says %.4f", c.name, c.got, c.want)
+		}
+	}
+}
+
+// The run file this package writes is the one trec_eval was given above, so a
+// change to its format would make the agreement above meaningless without
+// failing anything. This is what fails instead.
+func TestTheRunFileMatchesTheOneTrecEvalWasGiven(t *testing.T) {
+	want, err := os.ReadFile(filepath.Join("testdata", "reference.run"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var b strings.Builder
+	err = WriteRun(&b, "kura-bench", []Query{
+		{ID: "q1", IDs: []string{"d5", "d1", "d3", "d2"}},
+		{ID: "q2", IDs: []string{"d8", "d6", "d4"}},
+		{ID: "q3", IDs: []string{"d11", "d12", "d13"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.String() != string(want) {
+		t.Errorf("the run file this package writes is no longer the fixture trec_eval read:\ngot:\n%swant:\n%s", b.String(), want)
 	}
 }

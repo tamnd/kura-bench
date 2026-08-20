@@ -44,6 +44,8 @@ Reindexing five thousand documents into an index that is already open and alread
 Relevance, where the corpus came with judgments.
 Every result carries the page each query returned and not only how many documents matched, so the answers can be scored against what people judged relevant.
 nDCG at 10, MRR at 10, recall at the depth the page was, and the share of returned documents anybody judged either way.
+The definitions are the ones trec_eval uses and there is a test that checks them against a run of trec_eval itself, because a relevance score that cannot be lined up against a published one is a score that only compares against itself.
+Every run also writes a file in the format trec_eval reads, so anybody who does not trust the arithmetic here can check it with the program everyone else uses.
 This runs on the passage collection, which arrives with a real query log and a judgment file, and it does not run on the source checkouts, because nobody has judged those queries and inventing judgments to have a number would be worse than having none.
 
 Machine.

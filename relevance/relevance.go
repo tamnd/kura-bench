@@ -14,9 +14,14 @@
 // The metrics are the standard ones and they are computed here rather than
 // taken from a library so that the definitions are in front of a reader.
 // Everyone who has written their own nDCG has got it wrong at least once, so
-// there is a test that checks these against numbers worked out by hand, and the
-// scorer writes a run file in the format every existing evaluation tool reads,
-// so anybody who doubts the arithmetic can check it with a different program.
+// there is a test that checks these against numbers worked out by hand, and
+// another that checks them against trec_eval, which is the program every
+// published retrieval score is produced by. The definitions here are the ones
+// trec_eval uses, not the ones that are merely defensible, because a score that
+// cannot be lined up against a published one is a score that only compares
+// against itself. The scorer also writes a run file in the format every
+// evaluation tool reads, so anybody who doubts the arithmetic can check it with
+// a different program.
 package relevance
 
 import (
@@ -209,10 +214,19 @@ func Score(queries []Query, qrels Qrels, k int) Scores {
 				continue
 			}
 			hit++
-			// The gain is the graded one, which reduces to the binary case when
-			// every grade is one, so the same code scores both kinds of
-			// judgment.
-			dcg += (math.Pow(2, float64(grade)) - 1) / math.Log2(float64(i+2))
+			// The gain is the grade itself and the discount is the logarithm of
+			// the rank, which reduces to the binary case when every grade is
+			// one, so the same code scores both kinds of judgment.
+			//
+			// The other definition in circulation raises two to the grade and
+			// subtracts one, which weighs a grade of three more than three times
+			// as heavily as a grade of one. It is not wrong, it is a different
+			// question, and it is not the one anybody publishes a number for.
+			// trec_eval uses this one, every score quoted for BEIR and the deep
+			// learning tracks comes out of trec_eval, and a number of ours that
+			// cannot be lined up against those is a number that only compares
+			// against itself.
+			dcg += float64(grade) / math.Log2(float64(i+2))
 		}
 		if ideal := idealDCG(grades, k); ideal > 0 {
 			out.NDCG += dcg / ideal
@@ -271,7 +285,7 @@ func idealDCG(grades map[string]int, k int) float64 {
 	}
 	var out float64
 	for i, g := range best {
-		out += (math.Pow(2, float64(g)) - 1) / math.Log2(float64(i+2))
+		out += float64(g) / math.Log2(float64(i+2))
 	}
 	return out
 }
