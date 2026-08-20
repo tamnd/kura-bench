@@ -134,6 +134,21 @@ type Config struct {
 	Repeat  int
 	Limit   int
 	Workers int
+
+	// Depth is how many results a search asks for.
+	//
+	// Ten is a page, and a page is what a latency number should be measured on
+	// because it is what a user waits for. A hundred is what a first stage
+	// retriever has to return when something reranks behind it, and recall at a
+	// hundred is the number that decides whether the reranker had anything to
+	// work with, since a document the first stage missed cannot be recovered by
+	// anything downstream.
+	//
+	// It is one flag applied to every search rather than a deep untimed probe
+	// next to shallow timed runs, because the second arrangement quietly warms
+	// caches the timed runs then benefit from, and the bias would be invisible
+	// in the output.
+	Depth int
 }
 
 // Main is the whole of a runner's main function.
@@ -150,6 +165,7 @@ func Main(newEngine func(Config) (Engine, error)) {
 	flag.IntVar(&cfg.Repeat, "repeat", 20, "how many times each query is timed")
 	flag.IntVar(&cfg.Limit, "limit", 0, "stop after this many documents, zero for all")
 	flag.IntVar(&cfg.Workers, "workers", 0, "queries in flight for the throughput phase, zero for one per core")
+	flag.IntVar(&cfg.Depth, "depth", bench.DefaultDepth, "how many results each search asks for")
 	flag.Parse()
 
 	if err := run(cfg, newEngine); err != nil {
@@ -161,6 +177,12 @@ func Main(newEngine func(Config) (Engine, error)) {
 func run(cfg Config, newEngine func(Config) (Engine, error)) error {
 	if cfg.Corpus == "" || cfg.Work == "" {
 		return errors.New("both -corpus and -work are required")
+	}
+	// Here rather than next to the flag, because a Config built in code is as
+	// real a caller as a command line and a depth of zero would mean an engine
+	// was asked for no results at all.
+	if cfg.Depth <= 0 {
+		cfg.Depth = bench.DefaultDepth
 	}
 	eng, err := newEngine(cfg)
 	if err != nil {
@@ -293,7 +315,7 @@ func queryPhase(cfg Config, eng Engine, res *bench.Result) error {
 	if err := eng.Open(cfg.Work); err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
-	if _, err := eng.Search(ctx, queries[0], 10, nil); err != nil {
+	if _, err := eng.Search(ctx, queries[0], cfg.Depth, nil); err != nil {
 		return fmt.Errorf("the first query after open: %w", err)
 	}
 	openUsage := bench.Measure(openStart)
@@ -301,7 +323,7 @@ func queryPhase(cfg Config, eng Engine, res *bench.Result) error {
 
 	searchStart := bench.Take()
 	stats := make([]bench.QueryStat, 0, len(queries))
-	ids := make([]string, 0, 10)
+	ids := make([]string, 0, cfg.Depth)
 	for _, q := range queries {
 		// One warm up that is not counted, because the first run of a query
 		// pays for whatever the engine caches per term and no deployment sees
@@ -311,14 +333,14 @@ func queryPhase(cfg Config, eng Engine, res *bench.Result) error {
 		// identifiers allocates, and the run that pays for it is the one whose
 		// time nobody reads.
 		ids = ids[:0]
-		hits, err := eng.Search(ctx, q, 10, &ids)
+		hits, err := eng.Search(ctx, q, cfg.Depth, &ids)
 		if err != nil {
 			return fmt.Errorf("query %q: %w", q, err)
 		}
 		runs := make([]time.Duration, 0, cfg.Repeat)
 		for range cfg.Repeat {
 			t := time.Now()
-			hits, err = eng.Search(ctx, q, 10, nil)
+			hits, err = eng.Search(ctx, q, cfg.Depth, nil)
 			if err != nil {
 				return fmt.Errorf("query %q: %w", q, err)
 			}
@@ -335,7 +357,7 @@ func queryPhase(cfg Config, eng Engine, res *bench.Result) error {
 	}
 	searchUsage := bench.Measure(searchStart)
 
-	res.Search = bench.SearchPhase{Usage: searchUsage, Queries: stats}
+	res.Search = bench.SearchPhase{Usage: searchUsage, Depth: cfg.Depth, Queries: stats}
 	res.Search.Concurrent = concurrent(ctx, eng, queries, cfg)
 	res.Update = updatePhase(cfg, eng, res)
 	return nil
@@ -448,7 +470,7 @@ func concurrent(ctx context.Context, eng Engine, queries []string, cfg Config) *
 			defer wg.Done()
 			for q := range jobs {
 				t := time.Now()
-				_, err := eng.Search(ctx, q, 10, nil)
+				_, err := eng.Search(ctx, q, cfg.Depth, nil)
 				d := time.Since(t)
 				mu.Lock()
 				if err != nil && bad == nil {

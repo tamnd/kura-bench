@@ -359,7 +359,17 @@ The passage collection is the corpus that makes this possible, because it comes 
 The runners report the identifiers of the page they returned alongside the timings, collected on the warm up run so that no timed run pays for it, and the scorer matches those against the judgments.
 
 Two things it prints are worth reading before the scores.
-Recall is at the depth of the page, which is ten, and not the hundred a paper quotes, so it is a much harder number and the two are not comparable.
+Recall is at the depth of the page, which is ten by default, and not the hundred a paper quotes, so it is a much harder number and the two are not comparable.
+Recall at a hundred is the one that says whether a first stage retriever gave a reranker anything to work with, since a document the first stage missed cannot be recovered by anything downstream, and to get it the query phase has to be rerun asking for a deeper page.
+
+```
+make textbench TEXTSET=msmarco DEPTH=100
+make relevance DEPTH=100
+```
+
+The depth is a flag on the whole run rather than a deeper untimed probe alongside shallow timed runs, because the second arrangement warms caches that the timed runs then benefit from and the bias would not show up anywhere in the output.
+So a run at a hundred has honest recall and latencies that belong to a page of a hundred, and the report says so above the search table rather than leaving it in a JSON field.
+The scorer refuses to quietly compute recall at a depth the engines were never asked to fill, and says which ones came up short.
 Judged coverage is the share of returned documents anybody looked at, and when it is low the scores are mostly measuring how much an engine agrees with the systems that were in the pool when the judgments were made, rather than how good it is.
 
 `-runs` writes a run file per engine in the format every existing evaluation tool reads.

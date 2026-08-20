@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use benchrs::config::Config;
-use benchrs::{SEARCH_LIMIT, UPDATE_DOCUMENTS, config, corpus, machine, result, usage};
+use benchrs::{UPDATE_DOCUMENTS, config, corpus, machine, result, usage};
 
 use tantivy::collector::{Count, TopDocs};
 use tantivy::query::QueryParser;
@@ -175,7 +175,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     let reader = index.reader()?;
     let parser = QueryParser::for_index(&index, vec![fields.title, fields.body]);
     let searcher = reader.searcher();
-    search_once(&searcher, &parser, &queries[0], SEARCH_LIMIT, None)?;
+    search_once(&searcher, &parser, &queries[0], cfg.depth, None)?;
     let open = usage::measure(&open_start);
     res.open = result::OpenPhase {
         resident_bytes: open.rss_bytes,
@@ -184,7 +184,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
 
     let search_start = usage::take();
     let mut stats = Vec::with_capacity(queries.len());
-    let mut ids = Vec::with_capacity(SEARCH_LIMIT);
+    let mut ids = Vec::with_capacity(cfg.depth);
     for q in &queries {
         // One warm up that is not counted, because the first run of a query
         // pays for whatever the engine caches per term and no deployment sees
@@ -194,11 +194,11 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         // identifiers allocates, and the run that pays for it is the one whose
         // time nobody reads.
         ids.clear();
-        let mut hits = search_once(&searcher, &parser, q, SEARCH_LIMIT, Some(&mut ids))?;
+        let mut hits = search_once(&searcher, &parser, q, cfg.depth, Some(&mut ids))?;
         let mut runs = Vec::with_capacity(cfg.repeat);
         for _ in 0..cfg.repeat {
             let t = Instant::now();
-            hits = search_once(&searcher, &parser, q, SEARCH_LIMIT, None)?;
+            hits = search_once(&searcher, &parser, q, cfg.depth, None)?;
             runs.push(t.elapsed().as_secs_f64() * 1000.0);
         }
         let mut stat = result::summarise(q, hits, runs);
@@ -210,6 +210,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     let concurrent = concurrent_phase(&index, &fields, &queries, cfg)?;
     res.search = result::SearchPhase {
         usage: search,
+        depth: cfg.depth,
         queries: stats,
         concurrent,
     };
@@ -301,6 +302,7 @@ fn concurrent_phase(
     let next = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let jobs = Arc::new(jobs);
 
+    let depth = cfg.depth;
     let start = Instant::now();
     let mut handles = Vec::with_capacity(workers);
     for _ in 0..workers {
@@ -314,7 +316,7 @@ fn concurrent_phase(
                 let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 let Some(q) = jobs.get(i) else { break };
                 let t = Instant::now();
-                if search_once(&searcher, &parser, q, SEARCH_LIMIT, None).is_err() {
+                if search_once(&searcher, &parser, q, depth, None).is_err() {
                     return None;
                 }
                 times.push(t.elapsed().as_secs_f64() * 1000.0);

@@ -9,6 +9,7 @@
 // A runner is invoked as:
 //
 //	runner -corpus corpus.jsonl -queries queries.txt -work <dir> [-repeat n]
+//	       [-limit n] [-workers n] [-depth n] -phase index|query|all
 //
 // # What gets measured
 //
@@ -42,6 +43,21 @@ import (
 	"sort"
 	"time"
 )
+
+// DefaultDepth is how many results a search asks for unless a run says
+// otherwise.
+//
+// Ten is a page, and a page is what a latency number should be measured on
+// because it is what somebody waits for. A hundred is what a first stage
+// retriever has to return when something reranks behind it, and recall at a
+// hundred is the number that says whether the reranker had anything to work
+// with, since a document the first stage missed cannot be recovered by anything
+// downstream.
+//
+// It lives here rather than in the Go harness because the runners written in
+// other languages have to use the same number, and a constant that only one of
+// three implementations can see is not a contract.
+const DefaultDepth = 10
 
 // Result is what a runner writes to standard output.
 type Result struct {
@@ -138,6 +154,18 @@ type SearchPhase struct {
 	// engine that answers in ten milliseconds using eight threads is not
 	// cheaper than one that answers in fifty using one.
 	Usage Usage `json:"usage"`
+
+	// Depth is how many results each search asked for.
+	//
+	// It is recorded because a latency at a page of ten and a latency at a page
+	// of a hundred are different measurements, and because recall computed over
+	// these pages is recall at this number and at no other. Two result files
+	// that disagree here are not comparable, and without the field written down
+	// nothing downstream could tell.
+	//
+	// Zero means a result written before this was recorded, which was always a
+	// page of ten.
+	Depth int `json:"depth,omitempty"`
 
 	// Queries holds one entry per query in the set, measured one at a time.
 	Queries []QueryStat `json:"queries"`

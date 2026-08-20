@@ -205,9 +205,16 @@ textqueries: $(BIN)/kura-queries
 
 # The whole run against a downloaded corpus, which is the shortest way to a
 # number on something other than source code.
+#
+# DEPTH is how many results each search asks for. Ten is a page and is what a
+# latency number should be measured on. A hundred is what a first stage
+# retriever has to return when something reranks behind it, and it is the depth
+# to use when the answer wanted is recall rather than speed.
+DEPTH ?= 10
+
 .PHONY: textbench
 textbench: build textqueries
-	$(BIN)/kura-bench -corpus $(TEXTSET).jsonl -queries queries-$(TEXTSET).txt -bin $(BIN) -out results
+	$(BIN)/kura-bench -corpus $(TEXTSET).jsonl -queries queries-$(TEXTSET).txt -bin $(BIN) -out results -depth $(DEPTH)
 
 # Scores the answers rather than the latency, which only works on a corpus that
 # came with judgments. Today that is the passage collection.
@@ -221,7 +228,7 @@ BASELINE ?=
 .PHONY: relevance
 relevance: $(BIN)/kura-relevance
 	$(BIN)/kura-relevance -results results -qrels qrels.dev.small.tsv -queries queries.dev.small.tsv \
-		-runs runs -out $(SCORES) $(if $(BASELINE),-baseline $(BASELINE))
+		-runs runs -out $(SCORES) -k $(DEPTH) $(if $(BASELINE),-baseline $(BASELINE))
 
 .PHONY: bench
 bench: build

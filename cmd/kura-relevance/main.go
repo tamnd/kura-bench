@@ -85,6 +85,7 @@ func run(cfg config) error {
 		scores relevance.Scores
 	}
 	var rows []row
+	var shallow []string
 	for _, path := range files {
 		res, err := read(path)
 		if err != nil {
@@ -94,12 +95,26 @@ func run(cfg config) error {
 		if len(queries) == 0 {
 			continue
 		}
+		// Scoring at a depth deeper than the engine was allowed to return is
+		// the way to produce a recall figure that is really a measurement of
+		// the benchmark's own page size. Every engine loses the same way, so the
+		// table still ranks them correctly and the absolute number is nonsense,
+		// which is the worst of both.
+		if got := res.Search.Depth; got > 0 && got < depth {
+			shallow = append(shallow, fmt.Sprintf("%s at %d", res.Engine, got))
+		}
 		if runsDir != "" {
 			if err := writeRun(runsDir, res.Engine, queries); err != nil {
 				return err
 			}
 		}
 		rows = append(rows, row{res.Engine, relevance.Score(queries, judgments, depth)})
+	}
+	if len(shallow) > 0 {
+		fmt.Fprintf(os.Stderr,
+			"scoring at %d, but these engines were only asked for a shorter page: %s\n"+
+				"rerun the query phase with -depth %d, because recall at %d cannot be computed from a page that never held that many documents\n\n",
+			depth, strings.Join(shallow, ", "), depth, depth)
 	}
 
 	if len(rows) == 0 {
@@ -115,8 +130,13 @@ func run(cfg config) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("Recall is at %d and not at the hundred a paper would quote, because that is\n", depth)
-	fmt.Println("the size of the page the runners return. The two are not comparable.")
+	if depth == bench.DefaultDepth {
+		fmt.Printf("Recall is at %d and not at the hundred a paper would quote, because that is\n", depth)
+		fmt.Println("the size of the page the runners return by default. The two are not")
+		fmt.Println("comparable. Rerun the query phase with -depth 100 for the deeper number.")
+	} else {
+		fmt.Printf("Recall is at %d, which is the depth the runners were asked for.\n", depth)
+	}
 	fmt.Println("Success at 1 is the share of queries whose first result was relevant, which is")
 	fmt.Println("what somebody looking for a document they already know about experiences.")
 	fmt.Println("Judged is the share of returned documents anybody looked at. A low number")

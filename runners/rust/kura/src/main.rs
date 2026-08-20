@@ -33,7 +33,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use benchrs::config::Config;
-use benchrs::{SEARCH_LIMIT, config, corpus, machine, result, usage};
+use benchrs::{config, corpus, machine, result, usage};
 
 use kura_core::index;
 use kura_core::search::Searcher;
@@ -227,7 +227,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     let segment = Segment::open_without_checksum(&map)?;
     let reader = index::Reader::open(&segment)?;
     let mut scratch = store::Scratch::new();
-    search_once(&reader, &queries[0], SEARCH_LIMIT, &mut scratch, None)?;
+    search_once(&reader, &queries[0], cfg.depth, &mut scratch, None)?;
     let open = usage::measure(&open_start);
     res.open = result::OpenPhase {
         resident_bytes: open.rss_bytes,
@@ -236,7 +236,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
 
     let search_start = usage::take();
     let mut stats = Vec::with_capacity(queries.len());
-    let mut ids = Vec::with_capacity(SEARCH_LIMIT);
+    let mut ids = Vec::with_capacity(cfg.depth);
     for q in &queries {
         // One warm up that is not counted, because the first run of a query
         // pays for whatever the operating system has not faulted in yet and no
@@ -246,11 +246,11 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         // identifiers allocates, and the run that pays for it is the one whose
         // time nobody reads.
         ids.clear();
-        let mut hits = search_once(&reader, q, SEARCH_LIMIT, &mut scratch, Some(&mut ids))?;
+        let mut hits = search_once(&reader, q, cfg.depth, &mut scratch, Some(&mut ids))?;
         let mut runs = Vec::with_capacity(cfg.repeat);
         for _ in 0..cfg.repeat {
             let t = Instant::now();
-            hits = search_once(&reader, q, SEARCH_LIMIT, &mut scratch, None)?;
+            hits = search_once(&reader, q, cfg.depth, &mut scratch, None)?;
             runs.push(t.elapsed().as_secs_f64() * 1000.0);
         }
         let mut stat = result::summarise(q, hits, runs);
@@ -262,6 +262,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     let concurrent = concurrent_phase(&reader, &queries, cfg);
     res.search = result::SearchPhase {
         usage: search,
+        depth: cfg.depth,
         queries: stats,
         concurrent,
     };
@@ -356,7 +357,7 @@ fn concurrent_phase(
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(q) = jobs.get(i) else { break };
                     let t = Instant::now();
-                    if search_once(reader, q, SEARCH_LIMIT, &mut scratch, None).is_err() {
+                    if search_once(reader, q, cfg.depth, &mut scratch, None).is_err() {
                         return None;
                     }
                     times.push(t.elapsed().as_secs_f64() * 1000.0);

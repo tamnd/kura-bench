@@ -38,6 +38,7 @@ func main() {
 		limit      = flag.Int("limit", 0, "stop after this many documents, zero for the whole corpus")
 		repeat     = flag.Int("repeat", 20, "how many times each query is timed")
 		workers    = flag.Int("workers", 0, "queries in flight, zero for one per core")
+		depth      = flag.Int("depth", bench.DefaultDepth, "how many results each search asks for, ten for a page and a hundred for what a reranker needs behind it")
 		keep       = flag.Bool("keep", false, "leave the indexes in place after the run")
 		deadline   = flag.Duration("deadline", 0, "give up on a phase that runs longer than this, zero for no limit")
 	)
@@ -52,6 +53,7 @@ func main() {
 		limit:    *limit,
 		repeat:   *repeat,
 		workers:  *workers,
+		depth:    *depth,
 		keep:     *keep,
 		deadline: *deadline,
 	}
@@ -75,6 +77,7 @@ type config struct {
 	limit    int
 	repeat   int
 	workers  int
+	depth    int
 	keep     bool
 	deadline time.Duration
 }
@@ -202,6 +205,12 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
 	}
 	if cfg.workers > 0 {
 		args = append(args, "-workers", strconv.Itoa(cfg.workers))
+	}
+	// Passed only when it is not the default, so that a runner built before this
+	// flag existed still runs rather than failing on an argument it has never
+	// heard of.
+	if cfg.depth > 0 && cfg.depth != bench.DefaultDepth {
+		args = append(args, "-depth", strconv.Itoa(cfg.depth))
 	}
 
 	var stdout bytes.Buffer

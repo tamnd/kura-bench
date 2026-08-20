@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use benchrs::config::Config;
-use benchrs::{SEARCH_LIMIT, UPDATE_DOCUMENTS, config, corpus, machine, result, usage};
+use benchrs::{UPDATE_DOCUMENTS, config, corpus, machine, result, usage};
 
 use seekstorm::commit::Commit;
 use seekstorm::index::{
@@ -238,7 +238,7 @@ async fn query_phase(
     // the first touch of every page as free.
     let open_start = usage::take();
     let index = open_index(&cfg.work).await?;
-    search_once(&index, &queries[0], None).await;
+    search_once(&index, &queries[0], cfg.depth, None).await;
     let open = usage::measure(&open_start);
     res.open = result::OpenPhase {
         resident_bytes: open.rss_bytes,
@@ -247,7 +247,7 @@ async fn query_phase(
 
     let search_start = usage::take();
     let mut stats = Vec::with_capacity(queries.len());
-    let mut ids = Vec::with_capacity(SEARCH_LIMIT);
+    let mut ids = Vec::with_capacity(cfg.depth);
     for q in &queries {
         // One warm up that is not counted. The first run of a query pays for
         // whatever the engine caches per term, and no deployment sees that on
@@ -257,11 +257,11 @@ async fn query_phase(
         // identifiers allocates, and the run that pays for it is the one whose
         // time nobody reads.
         ids.clear();
-        let mut hits = search_once(&index, q, Some(&mut ids)).await;
+        let mut hits = search_once(&index, q, cfg.depth, Some(&mut ids)).await;
         let mut runs = Vec::with_capacity(cfg.repeat);
         for _ in 0..cfg.repeat {
             let t = Instant::now();
-            hits = search_once(&index, q, None).await;
+            hits = search_once(&index, q, cfg.depth, None).await;
             runs.push(t.elapsed().as_secs_f64() * 1000.0);
         }
         let mut stat = result::summarise(q, hits, runs);
@@ -273,6 +273,7 @@ async fn query_phase(
     let concurrent = concurrent_phase(&index, &queries, cfg).await;
     res.search = result::SearchPhase {
         usage: search,
+        depth: cfg.depth,
         queries: stats,
         concurrent,
     };
@@ -285,7 +286,12 @@ async fn query_phase(
 /// The total and the page are both asked for, because every other engine here
 /// reports a total, and fetching the page matters because a result list is
 /// shown to somebody.
-async fn search_once(index: &IndexArc, query: &str, mut ids: Option<&mut Vec<String>>) -> usize {
+async fn search_once(
+    index: &IndexArc,
+    query: &str,
+    depth: usize,
+    mut ids: Option<&mut Vec<String>>,
+) -> usize {
     let found = index
         .search(
             query.to_string(),
@@ -296,7 +302,7 @@ async fn search_once(index: &IndexArc, query: &str, mut ids: Option<&mut Vec<Str
             SearchMode::Lexical,
             false,
             0,
-            SEARCH_LIMIT,
+            depth,
             // TopkCount is the mode that returns an accurate total as well as
             // the page.
             ResultType::TopkCount,
@@ -346,6 +352,7 @@ async fn concurrent_phase(
     );
     let next = Arc::new(AtomicUsize::new(0));
 
+    let depth = cfg.depth;
     let start = Instant::now();
     let mut tasks = Vec::with_capacity(workers);
     for _ in 0..workers {
@@ -358,7 +365,7 @@ async fn concurrent_phase(
                 let i = next.fetch_add(1, Ordering::Relaxed);
                 let Some(q) = jobs.get(i) else { break };
                 let t = Instant::now();
-                search_once(&index, q, None).await;
+                search_once(&index, q, depth, None).await;
                 times.push(t.elapsed().as_secs_f64() * 1000.0);
             }
             times

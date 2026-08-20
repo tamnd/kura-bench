@@ -46,9 +46,21 @@ pub struct OpenPhase {
     pub resident_bytes: i64,
 }
 
+fn is_zero(n: &usize) -> bool {
+    *n == 0
+}
+
 #[derive(Serialize, Default)]
 pub struct SearchPhase {
     pub usage: Usage,
+
+    /// How many results each search asked for. A latency at a page of ten and a
+    /// latency at a page of a hundred are different measurements, and recall
+    /// computed over these pages is recall at this number and no other, so two
+    /// result files that disagree here are not comparable.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub depth: usize,
+
     pub queries: Vec<QueryStat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrent: Option<ConcurrentStat>,

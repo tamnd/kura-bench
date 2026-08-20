@@ -185,6 +185,40 @@ func TestThePageTheEngineReturnedIsReported(t *testing.T) {
 	}
 }
 
+// Recall at a hundred is the number that says whether a first stage retriever
+// gave a reranker anything to work with, and it cannot be computed from a page
+// of ten no matter how the arithmetic is arranged.
+func TestTheDepthAsksTheEngineForABiggerPage(t *testing.T) {
+	cfg, _ := fixture(t, 50)
+	cfg.Phase = "query"
+	cfg.Repeat = 2
+	cfg.Depth = 25
+
+	out := capture(t, cfg, &fake{})
+	if out.Search.Depth != 25 {
+		t.Fatalf("the result says the depth was %d, and a reader has no other way to know", out.Search.Depth)
+	}
+	for _, q := range out.Search.Queries {
+		if want := min(25, len(q.Query)); len(q.IDs) != want {
+			t.Fatalf("%q came back with %d identifiers at a depth of 25, want %d", q.Query, len(q.IDs), want)
+		}
+	}
+}
+
+// A depth of zero would ask an engine for no results at all, and the flag is
+// not the only way a Config gets built.
+func TestADepthOfZeroBecomesAPage(t *testing.T) {
+	cfg, _ := fixture(t, 20)
+	cfg.Phase = "query"
+	cfg.Repeat = 1
+	cfg.Depth = 0
+
+	out := capture(t, cfg, &fake{})
+	if out.Search.Depth != bench.DefaultDepth {
+		t.Fatalf("a depth of zero came out as %d", out.Search.Depth)
+	}
+}
+
 // A run without a query file is a mistake worth catching before an engine
 // spends an hour building an index nobody is going to search.
 func TestAQueryPhaseWithoutQueriesIsRefused(t *testing.T) {

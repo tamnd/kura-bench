@@ -35,8 +35,14 @@ final class Bench {
      * one engine and a fifth of the corpus on another is not comparable. */
     static final int UPDATE_DOCUMENTS = 5000;
 
-    /** How many results a search asks for. A result list is ten long, and an
-     * engine asked for ten thousand is doing a different job. */
+    /** How many results a search asks for unless a run says otherwise.
+     *
+     * Ten is a page, and a page is what a latency number should be measured on
+     * because it is what somebody waits for. A hundred is what a first stage
+     * retriever has to return when something reranks behind it, and recall at a
+     * hundred is the number that says whether the reranker had anything to work
+     * with, since a document the first stage missed cannot be recovered by
+     * anything downstream. */
     static final int SEARCH_LIMIT = 10;
 
     // The kernel reports processor time in clock ticks and there is no way to
@@ -58,6 +64,7 @@ final class Bench {
         int repeat = 20;
         int limit = 0;
         int workers = 0;
+        int depth = SEARCH_LIMIT;
 
         /** How many documents this run should touch, given the corpus limit. */
         int capped(int want) {
@@ -78,6 +85,7 @@ final class Bench {
                 case "repeat" -> cfg.repeat = number("repeat", value);
                 case "limit" -> cfg.limit = number("limit", value);
                 case "workers" -> cfg.workers = number("workers", value);
+                case "depth" -> cfg.depth = number("depth", value);
                 default -> throw new IllegalArgumentException("unknown flag " + name);
             }
         }
@@ -86,6 +94,9 @@ final class Bench {
         }
         if (!cfg.phase.equals("index") && cfg.queries == null) {
             throw new IllegalArgumentException("-queries is required for the query phase");
+        }
+        if (cfg.depth <= 0) {
+            cfg.depth = SEARCH_LIMIT;
         }
         return cfg;
     }
@@ -585,6 +596,13 @@ final class Bench {
         long openResidentBytes;
 
         Usage searchUsage;
+
+        /** How many results each search asked for. A latency at a page of ten
+         * and a latency at a page of a hundred are different measurements, and
+         * recall computed over these pages is recall at this number and no
+         * other, so two result files that disagree here are not comparable. */
+        int searchDepth;
+
         List<QueryStat> queries = new ArrayList<>();
         ConcurrentStat concurrent;
 
@@ -687,6 +705,9 @@ final class Bench {
 
         b.append("\"search\":{\"usage\":");
         usage(b, r.searchUsage).append(',');
+        if (r.searchDepth > 0) {
+            num(b, "depth", r.searchDepth).append(',');
+        }
         b.append("\"queries\":[");
         for (int i = 0; i < r.queries.size(); i++) {
             if (i > 0) {

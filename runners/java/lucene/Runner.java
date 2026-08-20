@@ -238,7 +238,7 @@ public final class Runner {
         // its latency column describe a different amount of hardware.
         IndexSearcher searcher = new IndexSearcher(reader);
         QueryParser parser = parser();
-        searchOnce(searcher, parser, queries.get(0), null);
+        searchOnce(searcher, parser, queries.get(0), cfg.depth, null);
         Bench.Usage open = Bench.measure(openStart);
         res.openUsage = open;
         res.openResidentBytes = open.rssBytes;
@@ -246,11 +246,11 @@ public final class Runner {
         // Outside the timed region on purpose. The cold start above is a real
         // cost and keeps its number, and the processor time this burns belongs
         // to nobody.
-        warmUp(searcher, parser, queries);
+        warmUp(searcher, parser, queries, cfg.depth);
 
         Bench.Snapshot searchStart = Bench.take();
         List<Bench.QueryStat> stats = new ArrayList<>(queries.size());
-        List<String> ids = new ArrayList<>(Bench.SEARCH_LIMIT);
+        List<String> ids = new ArrayList<>(cfg.depth);
         for (String q : queries) {
             // One warm up that is not counted, because the first run of a
             // query pays for whatever the engine caches per term and no
@@ -260,11 +260,11 @@ public final class Runner {
             // identifiers allocates, and the run that pays for it is the one
             // whose time nobody reads.
             ids.clear();
-            int hits = searchOnce(searcher, parser, q, ids);
+            int hits = searchOnce(searcher, parser, q, cfg.depth, ids);
             List<Double> runs = new ArrayList<>(cfg.repeat);
             for (int i = 0; i < cfg.repeat; i++) {
                 long t = System.nanoTime();
-                hits = searchOnce(searcher, parser, q, null);
+                hits = searchOnce(searcher, parser, q, cfg.depth, null);
                 runs.add((System.nanoTime() - t) / 1e6);
             }
             Bench.QueryStat stat = Bench.summarise(q, hits, runs);
@@ -274,6 +274,7 @@ public final class Runner {
         Bench.Usage search = Bench.measure(searchStart);
 
         res.searchUsage = search;
+        res.searchDepth = cfg.depth;
         res.queries = stats;
         res.concurrent = concurrentPhase(searcher, queries, cfg);
 
@@ -285,14 +286,15 @@ public final class Runner {
     /** Runs the query set until the compiler has had a chance at it. What it
      * did is printed, because a warm up nobody can see the size of is a knob
      * rather than a measurement. */
-    private static void warmUp(IndexSearcher searcher, QueryParser parser, List<String> queries)
+    private static void warmUp(
+            IndexSearcher searcher, QueryParser parser, List<String> queries, int depth)
             throws IOException {
         long start = System.nanoTime();
         int searches = 0;
         while (searches < WARMUP_SEARCHES
                 && (System.nanoTime() - start) / 1e9 < WARMUP_SECONDS) {
             for (String q : queries) {
-                searchOnce(searcher, parser, q, null);
+                searchOnce(searcher, parser, q, depth, null);
                 searches++;
             }
         }
@@ -322,11 +324,11 @@ public final class Runner {
      * one that is already in hand.
      */
     private static int searchOnce(
-            IndexSearcher searcher, QueryParser parser, String text, List<String> ids)
+            IndexSearcher searcher, QueryParser parser, String text, int depth, List<String> ids)
             throws IOException {
         Query query = parse(parser, text);
         int count = searcher.count(query);
-        TopDocs top = searcher.search(query, Bench.SEARCH_LIMIT);
+        TopDocs top = searcher.search(query, depth);
         StoredFields stored = searcher.storedFields();
         for (ScoreDoc hit : top.scoreDocs) {
             Document doc = stored.document(hit.doc);
@@ -388,7 +390,7 @@ public final class Runner {
                     }
                     long at = System.nanoTime();
                     try {
-                        searchOnce(searcher, parser, jobs.get(i), null);
+                        searchOnce(searcher, parser, jobs.get(i), cfg.depth, null);
                     } catch (IOException | RuntimeException e) {
                         failed[0] = true;
                         return;
