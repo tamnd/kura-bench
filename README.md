@@ -44,6 +44,9 @@ Reindexing five thousand documents into an index that is already open and alread
 Machine.
 Every result carries the host, the CPU, the core count, the memory, the load average before the run started and the free memory at that moment.
 A run on a machine that was already busy is marked as not dedicated, and the report says so, because a number taken on a loaded box is worth reporting and is not worth comparing.
+Each phase also records the load average at its own start and end, because a run takes a quarter of an hour and the engines in it are measured one after another, so a load average taken once at the beginning has stopped being true long before the last engine is reached.
+The report turns that into a table of what the machine was doing while each engine was measured, names the engines that were measured against other work, and says when the load moved far enough during the run that the engines did not see the same machine.
+Windows has no run queue average to read and leaves the fields out rather than filling them with a zero that would read as an idle machine.
 
 ## What is measured, in the vector suite
 

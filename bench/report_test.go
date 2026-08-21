@@ -135,3 +135,73 @@ func indexedAndSearched(name string) Result {
 		Update: &UpdatePhase{Documents: 5000, IndexBytesAfter: 420 << 20},
 	}
 }
+
+// The defect this was written for: a run on a shared machine recorded one load
+// average, at the start, and every engine measured after it inherited a number
+// that had stopped being true. An engine measured under load 30 beside engines
+// measured under load 4 reads as a regression and is not one.
+func TestTheReportSaysWhatTheMachineWasDoingDuringEachPhase(t *testing.T) {
+	quiet := indexedAndSearched("tantivy")
+	quiet.Index.Usage.LoadBefore, quiet.Index.Usage.LoadAfter = 0.8, 1.1
+	quiet.Search.Usage.LoadBefore, quiet.Search.Usage.LoadAfter = 1.0, 1.2
+
+	busy := indexedAndSearched("kura")
+	busy.Index.Usage.LoadBefore, busy.Index.Usage.LoadAfter = 1.2, 22.5
+	busy.Search.Usage.LoadBefore, busy.Search.Usage.LoadAfter = 24.0, 26.1
+
+	got := Report([]Result{withCores(quiet, 8), withCores(busy, 8)})
+	body := section(t, got, "## Machine load per phase")
+
+	for _, want := range []string{
+		"| tantivy | 0.80 to 1.10 | 1.00 to 1.20 |",
+		"| kura | 1.20 to 22.50 | 24.00 to 26.10 |",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the load table does not contain %q:\n%s", want, body)
+		}
+	}
+	if !strings.Contains(body, "kura were measured while the machine was busy") {
+		t.Errorf("the report does not say which engine was measured under load:\n%s", body)
+	}
+	if strings.Contains(body, "tantivy were measured while the machine was busy") {
+		t.Errorf("an engine measured on an idle machine was called contended:\n%s", body)
+	}
+	if !strings.Contains(body, "Load ranged from 0.80 to 26.10") {
+		t.Errorf("the report does not say the engines saw different machines:\n%s", body)
+	}
+}
+
+// Every result file written before the field existed has no load in it, and a
+// table of zeros would be a claim that the machine was idle.
+func TestAResultWithNoRecordedLoadHasNoLoadSection(t *testing.T) {
+	got := Report([]Result{indexedAndSearched("tantivy"), indexedAndSearched("kura")})
+	if strings.Contains(got, "## Machine load per phase") {
+		t.Errorf("a run that recorded no load got a load section:\n%s", got)
+	}
+}
+
+// A run where the load barely moved should not be told to go and do it again.
+func TestASteadyMachineIsNotAccusedOfMovingUnderTheRun(t *testing.T) {
+	first := indexedAndSearched("tantivy")
+	first.Index.Usage.LoadBefore, first.Index.Usage.LoadAfter = 0.9, 1.0
+	first.Search.Usage.LoadBefore, first.Search.Usage.LoadAfter = 1.0, 1.1
+
+	second := indexedAndSearched("kura")
+	second.Index.Usage.LoadBefore, second.Index.Usage.LoadAfter = 1.1, 1.2
+	second.Search.Usage.LoadBefore, second.Search.Usage.LoadAfter = 1.2, 1.3
+
+	body := section(t, Report([]Result{withCores(first, 8), withCores(second, 8)}), "## Machine load per phase")
+	if strings.Contains(body, "Load ranged") {
+		t.Errorf("a load that moved by a fifth was called a change of conditions:\n%s", body)
+	}
+	if strings.Contains(body, "measured while the machine was busy") {
+		t.Errorf("an idle eight core machine was called busy:\n%s", body)
+	}
+}
+
+// withCores puts a core count on a result, because contention is judged per
+// core and the shared helper does not carry one.
+func withCores(r Result, cores int) Result {
+	r.Machine.Cores = cores
+	return r
+}

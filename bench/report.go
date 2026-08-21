@@ -76,6 +76,7 @@ func Report(results []Result) string {
 
 	var b strings.Builder
 	writeMachine(&b, head.Machine)
+	writeLoad(&b, sorted, head.Machine.Cores)
 	writeCorpus(&b, head.Corpus)
 	writeIndexing(&b, sorted)
 	writeStorage(&b, sorted)
@@ -107,6 +108,95 @@ func writeMachine(b *strings.Builder, m Machine) {
 			m.LoadBefore, free)
 	}
 	b.WriteString("\n")
+}
+
+// writeLoad says what the machine was doing while each engine was measured.
+//
+// The machine section above reports the load when the run started, which is the
+// right number on a machine to ourselves and is nearly useless on a shared one.
+// A run takes fifteen minutes, engines are measured one after another, and the
+// last one can be competing with work that did not exist when the first one
+// ran. That produces a table where one engine looks three times worse than the
+// others for reasons that have nothing to do with the engine, and this is the
+// section that lets a reader see it instead of believing it.
+//
+// The section is omitted when nothing recorded a load, which is every result
+// file written before the field existed and every run on Windows.
+func writeLoad(b *strings.Builder, rs []Result, cores int) {
+	var (
+		rows      []string
+		contended []string
+		lowest    = -1.0
+		highest   = 0.0
+	)
+	for _, r := range rs {
+		index, indexOK := loadSpan(r.Index.Usage)
+		search, searchOK := loadSpan(r.Search.Usage)
+		if !indexOK && !searchOK {
+			continue
+		}
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s |", r.Engine, index, search))
+
+		phases := []Usage{r.Index.Usage, r.Search.Usage}
+		for _, u := range phases {
+			for _, load := range []float64{u.LoadBefore, u.LoadAfter} {
+				if load == 0 {
+					continue
+				}
+				if lowest < 0 || load < lowest {
+					lowest = load
+				}
+				if load > highest {
+					highest = load
+				}
+			}
+		}
+		// Named once however many of its phases were contended, and after the
+		// range above rather than inside it, because stopping early there would
+		// stop reading the loads as well.
+		for _, u := range phases {
+			if u.Contended(cores) {
+				contended = append(contended, r.Engine)
+				break
+			}
+		}
+	}
+	if len(rows) == 0 {
+		return
+	}
+
+	fmt.Fprintf(b, "## Machine load per phase\n\n")
+	b.WriteString("| engine | indexing, start to end | search, start to end |\n")
+	b.WriteString("| --- | --- | --- |\n")
+	fmt.Fprintf(b, "%s\n\n", strings.Join(rows, "\n"))
+
+	if len(contended) > 0 {
+		fmt.Fprintf(b, "%s were measured while the machine was busy with other work, so their numbers are a floor rather than a measurement.\n",
+			strings.Join(contended, ", "))
+		if len(contended) == 1 {
+			// Grammar aside, this is the case worth spelling out: one engine
+			// under load beside engines that were not is the shape that gets
+			// read as a regression.
+			b.WriteString("The engines beside it were not, so the gap between them is partly the machine.\n")
+		}
+	}
+	// A ratio rather than a difference, because a swing from 2 to 8 and a swing
+	// from 20 to 26 are the same difference and not remotely the same event.
+	if lowest > 0 && highest/lowest >= 2 {
+		fmt.Fprintf(b, "Load ranged from %.2f to %.2f across the run, so the engines were not measured under the same conditions and the run should be repeated interleaved before anything is concluded from the spread.\n",
+			lowest, highest)
+	}
+	b.WriteString("\n")
+}
+
+// loadSpan renders one phase's two load readings, and says whether there was
+// anything to render. A phase that recorded neither end is left out rather than
+// shown as zero, which would read as an idle machine.
+func loadSpan(u Usage) (string, bool) {
+	if u.LoadBefore == 0 && u.LoadAfter == 0 {
+		return "not recorded", false
+	}
+	return fmt.Sprintf("%.2f to %.2f", u.LoadBefore, u.LoadAfter), true
 }
 
 func writeCorpus(b *strings.Builder, c CorpusStats) {
