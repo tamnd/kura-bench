@@ -1,0 +1,33 @@
+{
+  "comment": [
+    "Lucene, pinned to a release and to the exact bytes of every jar it needs.",
+    "fetch.sh downloads them from Maven Central and refuses anything whose",
+    "checksum does not match.",
+    "",
+    "It is the jars people install rather than a source build, for the same",
+    "reason the graph suite takes a prebuilt library: the point is to measure",
+    "the engine that is actually deployed, and building it from source would",
+    "measure a build nobody runs.",
+    "",
+    "Three jars and no build tool. The runner is one file of Java compiled by",
+    "javac, so there is no gradle daemon, no wrapper to keep current and no",
+    "resolver deciding at build time which version got measured."
+  ],
+  "version": "10.5.1",
+  "repository": "https://repo1.maven.org/maven2",
+  "group": "org.apache.lucene",
+  "jars": [
+    {
+      "artifact": "lucene-core",
+      "sha256": "2b4912cc792f462e8e7b350f7c958f538ee7ec42da4cf4b65902fb9d546bba53"
+    },
+    {
+      "artifact": "lucene-analysis-common",
+      "sha256": "f710afd91a820987a48f3a215e076715b9237b324cf5458281109ef0d2a17b73"
+    },
+    {
+      "artifact": "lucene-queryparser",
+      "sha256": "75eddb74abccaf1f3ea5cb1ca2ceff29afb7f564892b50914404720f03d458c4"
+    }
+  ]
+}

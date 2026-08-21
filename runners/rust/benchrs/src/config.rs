@@ -30,6 +30,15 @@ pub struct Config {
 
     /// Queries in flight for the concurrent phase, zero for one per query.
     pub workers: usize,
+
+    /// How many results each search asks for.
+    ///
+    /// Ten is a page and is what a latency number should be measured on, since
+    /// a page is what somebody waits for. A hundred is what a first stage
+    /// retriever has to return when something reranks behind it, and recall at
+    /// a hundred is the number that says whether the reranker had anything to
+    /// work with.
+    pub depth: usize,
 }
 
 impl Default for Config {
@@ -42,6 +51,7 @@ impl Default for Config {
             repeat: 20,
             limit: 0,
             workers: 0,
+            depth: crate::SEARCH_LIMIT,
         }
     }
 }
@@ -78,6 +88,7 @@ pub fn parse(args: &[String]) -> Result<Config, String> {
             "repeat" => cfg.repeat = parse_usize("repeat", &value)?,
             "limit" => cfg.limit = parse_usize("limit", &value)?,
             "workers" => cfg.workers = parse_usize("workers", &value)?,
+            "depth" => cfg.depth = parse_usize("depth", &value)?,
             other => return Err(format!("unknown flag {other}")),
         }
         i += 2;
@@ -88,6 +99,9 @@ pub fn parse(args: &[String]) -> Result<Config, String> {
     }
     if cfg.phase != "index" && cfg.queries.as_os_str().is_empty() {
         return Err("-queries is required for the query phase".to_string());
+    }
+    if cfg.depth == 0 {
+        cfg.depth = crate::SEARCH_LIMIT;
     }
     Ok(cfg)
 }
@@ -116,7 +130,7 @@ mod tests {
     fn it_takes_the_flags_the_go_harness_sends() {
         let cfg = parse(&args(&[
             "-corpus", "c.jsonl", "-queries", "q.txt", "-work", "w", "-phase", "query", "-repeat",
-            "7", "-limit", "100", "-workers", "4",
+            "7", "-limit", "100", "-workers", "4", "-depth", "100",
         ]))
         .unwrap();
 
@@ -127,6 +141,22 @@ mod tests {
         assert_eq!(cfg.repeat, 7);
         assert_eq!(cfg.limit, 100);
         assert_eq!(cfg.workers, 4);
+        assert_eq!(cfg.depth, 100);
+    }
+
+    /// A run that does not say what depth it wants gets a page, which is the
+    /// same default the Go harness has, because the orchestrator only sends the
+    /// flag when it is asking for something else.
+    #[test]
+    fn a_run_that_says_nothing_about_depth_gets_a_page() {
+        let cfg = parse(&args(&["-corpus", "c", "-work", "w", "-phase", "index"])).unwrap();
+        assert_eq!(cfg.depth, crate::SEARCH_LIMIT);
+
+        let zero = parse(&args(&[
+            "-corpus", "c", "-work", "w", "-phase", "index", "-depth", "0",
+        ]))
+        .unwrap();
+        assert_eq!(zero.depth, crate::SEARCH_LIMIT);
     }
 
     #[test]

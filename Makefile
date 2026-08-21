@@ -33,13 +33,19 @@ GRAPH ?= ca-grqc
 all: build
 
 .PHONY: build
-build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench $(BIN)/kura-report go-runners rust-runners
+build: $(BIN)/kura-bench $(BIN)/kura-corpus $(BIN)/kura-queries $(BIN)/kura-relevance $(BIN)/kura-vectors $(BIN)/kura-vecbench $(BIN)/kura-graphs $(BIN)/kura-graphbench $(BIN)/kura-report go-runners rust-runners
 
 $(BIN)/kura-bench: $(shell find cmd/kura-bench bench -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-bench
 
 $(BIN)/kura-corpus: $(shell find cmd/kura-corpus corpus -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-corpus
+
+$(BIN)/kura-queries: $(shell find cmd/kura-queries corpus -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-queries
+
+$(BIN)/kura-relevance: $(shell find cmd/kura-relevance relevance bench -name '*.go')
+	$(GO) build -o $@ ./cmd/kura-relevance
 
 $(BIN)/kura-vectors: $(shell find cmd/kura-vectors vectors -name '*.go')
 	$(GO) build -o $@ ./cmd/kura-vectors
@@ -100,6 +106,43 @@ rust-runners:
 ladybug-lib:
 	$(LADYBUG)/fetch.sh
 
+# Lucene is what most enterprise search actually runs on, since Elasticsearch
+# and OpenSearch are Lucene with a cluster around them, so it belongs in the
+# table. It is the one runner here that needs a Java compiler, and like ladybug
+# it is built by its own target rather than by the default one. Everything else
+# works without it.
+JAVA ?= java
+JAVAC ?= javac
+LUCENE := runners/java/lucene
+LUCENE_VERSION := $(shell sed -n 's/^[[:space:]]*"version": "\([^"]*\)".*/\1/p' $(LUCENE)/lucene.json | head -1)
+LUCENE_JARS := $(abspath $(LUCENE)/$(LUCENE_VERSION))
+LUCENE_CLASSES := $(abspath $(LUCENE)/classes)
+
+.PHONY: lucene-jars
+lucene-jars:
+	$(LUCENE)/fetch.sh
+
+# The two flags are the ones Lucene asks for at startup when it does not have
+# them. Without the incubator module it falls back to scalar code in the places
+# it has written vector code for, and without native access it prints a warning
+# on every run about a restricted method that a later release will refuse
+# outright. Both are what its own documentation tells an operator to pass, so
+# running without them would measure a Lucene nobody deploys.
+LUCENE_FLAGS := --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED
+
+# The wrapper is what the orchestrator runs, because the contract is an
+# executable named after the engine and a virtual machine needs a class path in
+# front of it. It is written with absolute paths so that it works from whatever
+# directory a run happens in.
+.PHONY: lucene
+lucene: lucene-jars
+	$(JAVAC) -d $(LUCENE_CLASSES) -cp "$(LUCENE_JARS)/*" $(LUCENE)/Bench.java $(LUCENE)/Runner.java
+	@mkdir -p $(BIN)
+	@printf '#!/bin/sh\nexec %s %s -cp "%s:%s/*" Runner "$$@"\n' \
+		"$(JAVA)" "$(LUCENE_FLAGS)" "$(LUCENE_CLASSES)" "$(LUCENE_JARS)" > $(BIN)/lucene-runner
+	@chmod +x $(BIN)/lucene-runner
+	@echo "built $(BIN)/lucene-runner against lucene $(LUCENE_VERSION)"
+
 # The rpath is what lets the binary find the library without an environment
 # variable at run time, which matters because the orchestrator starts the
 # runners itself.
@@ -132,6 +175,61 @@ lint:
 corpus: $(BIN)/kura-corpus
 	$(BIN)/kura-corpus -root $(ROOT) -out $(CORPUS)
 
+# Downloads a published corpus and builds it. Source code is one shape of text
+# and these are the others, so a number measured on one of them is a different
+# fact from the same number measured on the checkouts. The archive is
+# checksummed and kept, so running this again costs nothing.
+TEXTSET ?= enron
+CACHE ?= cache
+
+.PHONY: textset
+textset: $(BIN)/kura-corpus
+	$(BIN)/kura-corpus -dataset $(TEXTSET) -cache $(CACHE) -limit $(TEXTLIMIT) -out $(TEXTSET).jsonl
+
+# Zero means all of them. It is a variable rather than a hardcoded zero because
+# the passage collection is nine million documents and not every machine that
+# wants a latency number has room for it.
+TEXTLIMIT ?= 0
+
+# Writes the query set for a corpus. queries.txt is about source code and asks
+# about deadlocks and mmap, so running it against mail or an encyclopaedia
+# measures nothing. Each corpus gets its own set, built from the corpus itself
+# unless a real query log came down with it.
+.PHONY: textqueries
+textqueries: $(BIN)/kura-queries
+	@if [ -f queries.dev.small.tsv ] && [ "$(TEXTSET)" = "msmarco" ]; then \
+		$(BIN)/kura-queries -log queries.dev.small.tsv -out queries-$(TEXTSET).txt; \
+	else \
+		$(BIN)/kura-queries -corpus $(TEXTSET).jsonl -out queries-$(TEXTSET).txt; \
+	fi
+
+# The whole run against a downloaded corpus, which is the shortest way to a
+# number on something other than source code.
+#
+# DEPTH is how many results each search asks for. Ten is a page and is what a
+# latency number should be measured on. A hundred is what a first stage
+# retriever has to return when something reranks behind it, and it is the depth
+# to use when the answer wanted is recall rather than speed.
+DEPTH ?= 10
+
+.PHONY: textbench
+textbench: build textqueries
+	$(BIN)/kura-bench -corpus $(TEXTSET).jsonl -queries queries-$(TEXTSET).txt -bin $(BIN) -out results -depth $(DEPTH)
+
+# Scores the answers rather than the latency, which only works on a corpus that
+# came with judgments. Today that is the passage collection.
+#
+# It writes the run files that let another tool check the arithmetic and a JSON
+# file of the scores. Point BASELINE at an earlier scores file to fail the target
+# when a score has fallen further than the tolerance recorded in that file.
+SCORES ?= scores.json
+BASELINE ?=
+
+.PHONY: relevance
+relevance: $(BIN)/kura-relevance
+	$(BIN)/kura-relevance -results results -qrels qrels.dev.small.tsv -queries queries.dev.small.tsv \
+		-runs runs -out $(SCORES) -k $(DEPTH) $(if $(BASELINE),-baseline $(BASELINE))
+
 .PHONY: bench
 bench: build
 	$(BIN)/kura-bench -corpus $(CORPUS) -queries $(QUERIES) -bin $(BIN) -out results
@@ -158,7 +256,7 @@ graphbench: build
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN)
+	rm -rf $(BIN) $(LUCENE)/classes
 	@if command -v $(CARGO) >/dev/null 2>&1; then \
 		$(CARGO) clean --manifest-path $(RUST)/Cargo.toml; \
 	fi

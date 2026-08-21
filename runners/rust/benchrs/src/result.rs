@@ -46,9 +46,21 @@ pub struct OpenPhase {
     pub resident_bytes: i64,
 }
 
+fn is_zero(n: &usize) -> bool {
+    *n == 0
+}
+
 #[derive(Serialize, Default)]
 pub struct SearchPhase {
     pub usage: Usage,
+
+    /// How many results each search asked for. A latency at a page of ten and a
+    /// latency at a page of a hundred are different measurements, and recall
+    /// computed over these pages is recall at this number and no other, so two
+    /// result files that disagree here are not comparable.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub depth: usize,
+
     pub queries: Vec<QueryStat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrent: Option<ConcurrentStat>,
@@ -72,6 +84,15 @@ pub struct QueryStat {
     pub p90_ms: f64,
     pub p99_ms: f64,
     pub max_ms: f64,
+
+    /// The page the engine returned, in the order it returned it, collected on
+    /// the warm up run so that no timed run pays for it.
+    ///
+    /// A relevance score needs to know what came back and not only how many,
+    /// and a latency comparison needs a way to check that two engines answered
+    /// the same question. The total does not establish that on its own.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ids: Vec<String>,
 }
 
 #[derive(Serialize, Default)]
@@ -105,6 +126,9 @@ pub fn summarise(query: &str, hits: usize, mut ms: Vec<f64>) -> QueryStat {
         p90_ms: percentile(&ms, 0.90),
         p99_ms: percentile(&ms, 0.99),
         max_ms: ms[ms.len() - 1],
+        // The caller fills this in, because which run the page came off is the
+        // caller's decision and not this helper's.
+        ids: Vec::new(),
     }
 }
 

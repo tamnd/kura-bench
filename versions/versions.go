@@ -25,20 +25,21 @@ type Engine struct {
 	Suite    string `json:"suite"`
 	Language string `json:"language"`
 
-	// Registry is where the latest version comes from: gomod, crate, github for
-	// a prebuilt library taken from a repository's releases, ours for an engine
-	// of our own that is pinned to a commit and has nothing to be behind, or
-	// none for one that is written out in this repository and has no dependency
-	// to track at all.
+	// Registry is where the latest version comes from: gomod, crate, maven,
+	// github for a prebuilt library taken from a repository's releases, ours
+	// for an engine of our own that is pinned to a commit and has nothing to be
+	// behind, or none for one that is written out in this repository and has no
+	// dependency to track at all.
 	Registry string `json:"registry"`
 
-	// Package is the module path, the crate name, or the owner and repository
-	// for github. It is empty when the registry is none.
+	// Package is the module path, the crate name, the group and artifact
+	// separated by a colon for maven, or the owner and repository for github.
+	// It is empty when the registry is none.
 	Package string `json:"package"`
 
 	// Version is the pin, for a registry where the pin lives in this file
-	// rather than in a lock file. That is github and nothing else, because a
-	// prebuilt library has no lock file to read it out of.
+	// rather than in a lock file. That is github and maven, because a prebuilt
+	// library and a downloaded jar have no lock file to read it out of.
 	Version string `json:"version,omitempty"`
 
 	Source string `json:"source"`
@@ -127,6 +128,14 @@ func check(ctx context.Context, client *http.Client, e Engine, repo Repo) Status
 		}
 		s.Pinned = v
 		s.Latest, s.Err = LatestCrate(ctx, client, e.Package)
+
+	case "maven":
+		if e.Version == "" {
+			s.Err = fmt.Errorf("%s: a maven pin needs a version in engines.json", e.Name)
+			return s
+		}
+		s.Pinned = e.Version
+		s.Latest, s.Err = LatestMaven(ctx, client, e.Package)
 
 	case "github":
 		if e.Version == "" {
@@ -329,6 +338,56 @@ func LatestCrate(ctx context.Context, client *http.Client, crate string) (string
 		// The index is in publication order, so the last one standing is the
 		// newest.
 		latest = v.Version
+	}
+	if latest == "" {
+		return "", fmt.Errorf("%s: no released version", url)
+	}
+	return latest, nil
+}
+
+// MavenRepository is where jar versions are looked up. It is a variable so a
+// test can point it somewhere it controls.
+var MavenRepository = "https://repo1.maven.org/maven2"
+
+// mavenVersion pulls one element out of the metadata a Maven repository
+// publishes beside every artifact. It is a regular expression rather than an
+// XML decoder because the file has three fields worth reading and none of them
+// nests, and because a decoder would have to be told what to do with the rest
+// of a document this has no use for.
+var mavenVersion = regexp.MustCompile(`<(release|latest|version)>([^<]+)</`)
+
+// LatestMaven asks a Maven repository for the newest release of an artifact,
+// which is named as the group and the artifact separated by a colon.
+//
+// The release element is what the repository itself calls the current one, so
+// it is preferred. When an artifact has none the version list is read instead,
+// newest last, skipping anything with a suffix, since pinning a benchmark to a
+// release candidate would measure something nobody is running.
+func LatestMaven(ctx context.Context, client *http.Client, coordinate string) (string, error) {
+	group, artifact, ok := strings.Cut(coordinate, ":")
+	if !ok {
+		return "", fmt.Errorf("%q is not a group and an artifact separated by a colon", coordinate)
+	}
+	url := MavenRepository + "/" + strings.ReplaceAll(group, ".", "/") + "/" + artifact + "/maven-metadata.xml"
+	body, err := get(ctx, client, url)
+	if err != nil {
+		return "", err
+	}
+
+	latest := ""
+	for _, m := range mavenVersion.FindAllStringSubmatch(string(body), -1) {
+		switch m[1] {
+		case "release":
+			return m[2], nil
+		case "version":
+			if !strings.Contains(m[2], "-") {
+				latest = m[2]
+			}
+		case "latest":
+			if latest == "" && !strings.Contains(m[2], "-") {
+				latest = m[2]
+			}
+		}
 	}
 	if latest == "" {
 		return "", fmt.Errorf("%s: no released version", url)

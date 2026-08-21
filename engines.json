@@ -43,6 +43,16 @@
       "source": "https://github.com/SeekStorm/SeekStorm"
     },
     {
+      "name": "lucene",
+      "suite": "text",
+      "language": "java",
+      "registry": "maven",
+      "package": "org.apache.lucene:lucene-core",
+      "version": "10.5.1",
+      "source": "https://github.com/apache/lucene",
+      "note": "What most enterprise search actually runs on, since Elasticsearch and OpenSearch are Lucene with a cluster around them. Its writer is given the same memory budget as tantivy's rather than its own default of sixteen megabytes, and it is fed from one thread like every other engine here, so the index phase does not use the several threads a Lucene bulk load usually gets. Peak resident memory is the whole virtual machine and includes heap the collector has not returned."
+    },
+    {
       "name": "turbovec",
       "suite": "vector",
       "language": "rust",

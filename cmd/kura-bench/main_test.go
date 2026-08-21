@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/tamnd/kura-bench/bench"
+)
 
 // An engine that logs while it indexes must not cost itself a row in the table,
 // so the result is read from the last line rather than from all of stdout.
@@ -22,5 +29,149 @@ func TestTheResultIsTheLastLineOfStdout(t *testing.T) {
 				t.Errorf("got %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// A run over a real corpus can spend hours in one engine's index phase, and the
+// point of naming the engines is to say which of them you want the numbers for
+// first. Alphabetical order would put an engine you are only running out of
+// curiosity ahead of the four you are waiting on.
+func TestEnginesRunInTheOrderTheyWereNamed(t *testing.T) {
+	dir := runners(t, "alpha", "beta", "gamma")
+
+	got := names(t, config{binDir: dir, engines: []string{"gamma", "alpha"}})
+	if want := []string{"gamma", "alpha"}; !equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Without the flag there is no order to honour, so the directory's is used and
+// it has to be stable, because a report is easier to read against an earlier one
+// when the rows come out the same way twice.
+func TestWithoutTheFlagEveryRunnerRunsInDirectoryOrder(t *testing.T) {
+	dir := runners(t, "gamma", "alpha", "beta")
+
+	got := names(t, config{binDir: dir})
+	if want := []string{"alpha", "beta", "gamma"}; !equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Naming an engine that is not there is a typo or a runner that was never built.
+// Skipping it quietly means finding out hours later that the row you started the
+// run for is the one missing from the table.
+func TestNamingAnEngineThatIsNotThereFailsBeforeAnythingRuns(t *testing.T) {
+	dir := runners(t, "alpha")
+
+	_, err := discover(config{binDir: dir, engines: []string{"alpha", "tantivy"}})
+	if err == nil {
+		t.Fatal("a missing runner was accepted")
+	}
+	if !strings.Contains(err.Error(), "tantivy") {
+		t.Errorf("the error does not say which engine is missing: %v", err)
+	}
+}
+
+func names(t *testing.T, cfg config) []string {
+	t.Helper()
+	found, err := discover(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make([]string, 0, len(found))
+	for _, r := range found {
+		out = append(out, r.name)
+	}
+	return out
+}
+
+// runners makes a directory that looks like one make build wrote, plus a file
+// that is not a runner so the naming rule is exercised too.
+func runners(t *testing.T, engines ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, e := range engines {
+		write(t, filepath.Join(dir, e+"-runner"))
+	}
+	write(t, filepath.Join(dir, "kura-corpus"))
+	return dir
+}
+
+func write(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// The mail corpus identifies documents by mailbox path, which carries the
+// surnames of real people, and a result file is a thing somebody commits. The
+// timings are what the table is built from and they all survive.
+func TestARestrictedCorpusLosesTheDocumentsAndKeepsTheNumbers(t *testing.T) {
+	res := bench.Result{
+		Engine: "kura",
+		Search: bench.SearchPhase{
+			Depth: 10,
+			Queries: []bench.QueryStat{
+				{Query: "the", Hits: 418577, Runs: 20, MedianMS: 5.08, IDs: []string{"a/inbox/1.", "b/sent/2."}},
+				{Query: "meeting", Hits: 9012, Runs: 20, MedianMS: 1.2, IDs: []string{"c/inbox/3."}},
+			},
+		},
+	}
+
+	got := withoutDocuments(res)
+
+	for _, q := range got.Search.Queries {
+		if q.IDs != nil {
+			t.Errorf("%q still carries %v", q.Query, q.IDs)
+		}
+		if q.Runs != 20 || q.MedianMS == 0 || q.Hits == 0 {
+			t.Errorf("%q lost a timing as well: %+v", q.Query, q)
+		}
+	}
+	if got.Search.Depth != 10 {
+		t.Errorf("the depth was lost, so nothing downstream can tell what these were measured at")
+	}
+	// The caller keeps its own copy, since it may still want to write the
+	// report from the full result.
+	if res.Search.Queries[0].IDs == nil {
+		t.Error("the original was modified in place")
+	}
+}
+
+// Two corpora on one machine used to write to the same file, so the second run
+// replaced the first without saying anything. It happened, and git is the only
+// reason the first one still exists.
+func TestTheCorpusIsInTheResultFileName(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"enron.jsonl", "enron"},
+		{"/root/bench/enron.jsonl", "enron"},
+		{"corpus.jsonl", "corpus"},
+		{"msmarco-100k.jsonl", "msmarco-100k"},
+		{"Simple Wiki.jsonl", "simple-wiki"},
+		{"", "unknown"},
+	}
+	for _, c := range cases {
+		if got := corpusSlug(c.path); got != c.want {
+			t.Errorf("corpusSlug(%q) = %q, want %q", c.path, got, c.want)
+		}
+	}
+	if corpusSlug("enron.jsonl") == corpusSlug("corpus.jsonl") {
+		t.Error("two corpora still collide")
 	}
 }

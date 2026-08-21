@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/tamnd/kura-bench/bench"
+	"github.com/tamnd/kura-bench/corpus"
 )
 
 func main() {
@@ -38,6 +39,7 @@ func main() {
 		limit      = flag.Int("limit", 0, "stop after this many documents, zero for the whole corpus")
 		repeat     = flag.Int("repeat", 20, "how many times each query is timed")
 		workers    = flag.Int("workers", 0, "queries in flight, zero for one per core")
+		depth      = flag.Int("depth", bench.DefaultDepth, "how many results each search asks for, ten for a page and a hundred for what a reranker needs behind it")
 		keep       = flag.Bool("keep", false, "leave the indexes in place after the run")
 		deadline   = flag.Duration("deadline", 0, "give up on a phase that runs longer than this, zero for no limit")
 	)
@@ -52,6 +54,7 @@ func main() {
 		limit:    *limit,
 		repeat:   *repeat,
 		workers:  *workers,
+		depth:    *depth,
 		keep:     *keep,
 		deadline: *deadline,
 	}
@@ -75,6 +78,7 @@ type config struct {
 	limit    int
 	repeat   int
 	workers  int
+	depth    int
 	keep     bool
 	deadline time.Duration
 }
@@ -102,6 +106,26 @@ func run(cfg config) error {
 		}
 	}
 
+	// Asked once, up front, so the operator finds out before spending an hour
+	// rather than afterwards.
+	publishable, why := corpus.Publishable(cfg.corpus)
+	if !publishable {
+		fmt.Fprintf(os.Stderr, "%s\nthe result files will carry the timings but not the documents that came back, so nothing here identifies anybody\n", why)
+	}
+
+	// Once, before anything runs, because it digests the corpus and there is no
+	// sense doing that five times over the same file. Every result gets a copy,
+	// so each file stands on its own rather than only meaning something next to
+	// the report it was written beside.
+	run := bench.Run{
+		Corpus:  cfg.corpus,
+		Queries: cfg.queries,
+		Repeat:  cfg.repeat,
+		Workers: cfg.workers,
+		Depth:   cfg.depth,
+		Limit:   cfg.limit,
+	}.Describe()
+
 	var results []bench.Result
 	for _, r := range runners {
 		fmt.Fprintf(os.Stderr, "\n== %s\n", r.name)
@@ -116,9 +140,13 @@ func run(cfg config) error {
 		if res.Incomplete != "" {
 			fmt.Fprintf(os.Stderr, "%s: %s, keeping what it did measure\n", r.name, res.Incomplete)
 		}
+		res.Run = &run
+		if !publishable {
+			res = withoutDocuments(res)
+		}
 		results = append(results, res)
 
-		name := filepath.Join(cfg.out, r.name+"-"+hostSlug(res.Machine.Host)+".json")
+		name := filepath.Join(cfg.out, r.name+"-"+corpusSlug(cfg.corpus)+"-"+hostSlug(res.Machine.Host)+".json")
 		if err := writeJSON(name, res); err != nil {
 			return err
 		}
@@ -128,7 +156,7 @@ func run(cfg config) error {
 		return errors.New("every engine failed")
 	}
 
-	report := filepath.Join(cfg.out, "report-"+hostSlug(results[0].Machine.Host)+".md")
+	report := filepath.Join(cfg.out, "report-"+corpusSlug(cfg.corpus)+"-"+hostSlug(results[0].Machine.Host)+".md")
 	body := header(cfg, results[0]) + bench.Report(results)
 	if err := os.WriteFile(report, []byte(body), 0o644); err != nil {
 		return err
@@ -173,6 +201,27 @@ func measure(cfg config, r runnerBin, work string) (bench.Result, error) {
 	return bench.Merge(index, query), nil
 }
 
+// withoutDocuments strips the identifiers an engine returned, for a corpus
+// whose documents may not leave the machine.
+//
+// Everything a table is built from survives: the timings, the hit counts, the
+// sizes, the query text. What goes is the list of documents that came back,
+// which for the mail corpus is a list of real people's mailbox paths and is the
+// one field in a result file that identifies anybody.
+//
+// The cost is that relevance cannot be scored from these files, which is not a
+// cost at all: the corpora with judgments are the publishable ones, and a
+// restricted corpus has no judgments to score against.
+func withoutDocuments(res bench.Result) bench.Result {
+	stripped := make([]bench.QueryStat, len(res.Search.Queries))
+	copy(stripped, res.Search.Queries)
+	for i := range stripped {
+		stripped[i].IDs = nil
+	}
+	res.Search.Queries = stripped
+	return res
+}
+
 // incomplete is what an engine that ran out of time gets instead of being
 // dropped from the run.
 //
@@ -202,6 +251,12 @@ func invoke(cfg config, r runnerBin, work, phase string) (bench.Result, error) {
 	}
 	if cfg.workers > 0 {
 		args = append(args, "-workers", strconv.Itoa(cfg.workers))
+	}
+	// Passed only when it is not the default, so that a runner built before this
+	// flag existed still runs rather than failing on an argument it has never
+	// heard of.
+	if cfg.depth > 0 && cfg.depth != bench.DefaultDepth {
+		args = append(args, "-depth", strconv.Itoa(cfg.depth))
 	}
 
 	var stdout bytes.Buffer
@@ -266,18 +321,20 @@ type runnerBin struct {
 // engine written in another language joins the comparison without anything here
 // knowing about it. The corpus builder and the orchestrator live in the same
 // directory and are skipped by the same rule.
+//
+// When -engines names them, they run in the order it names them. On a real
+// corpus one engine's index phase can take hours, and having that decided by
+// where its name falls in the alphabet means a slow engine holds up every
+// result behind it. Without the flag the order is the directory's, which is
+// alphabetical and has to be something.
 func discover(cfg config) ([]runnerBin, error) {
 	entries, err := os.ReadDir(cfg.binDir)
 	if err != nil {
 		return nil, fmt.Errorf("%w, run make build first", err)
 	}
 
-	want := map[string]bool{}
-	for _, e := range cfg.engines {
-		want[strings.TrimSpace(e)] = true
-	}
-
-	var out []runnerBin
+	found := map[string]runnerBin{}
+	var order []string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -287,10 +344,30 @@ func discover(cfg config) ([]runnerBin, error) {
 		if !ok || name == "" {
 			continue
 		}
-		if len(want) > 0 && !want[name] {
-			continue
+		found[name] = runnerBin{name: name, path: filepath.Join(cfg.binDir, e.Name())}
+		order = append(order, name)
+	}
+
+	if len(cfg.engines) > 0 {
+		order = order[:0]
+		for _, e := range cfg.engines {
+			name := strings.TrimSpace(e)
+			if name == "" {
+				continue
+			}
+			if _, ok := found[name]; !ok {
+				// Named and not there is a typo or a runner that was never
+				// built, and either way a silent skip means waiting out a whole
+				// run to find the engine missing from the table.
+				return nil, fmt.Errorf("no %s-runner in %s", name, cfg.binDir)
+			}
+			order = append(order, name)
 		}
-		out = append(out, runnerBin{name: name, path: filepath.Join(cfg.binDir, e.Name())})
+	}
+
+	out := make([]runnerBin, 0, len(order))
+	for _, name := range order {
+		out = append(out, found[name])
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("no runners in %s, run make build first", cfg.binDir)
@@ -316,6 +393,26 @@ func header(cfg config, first bench.Result) string {
 		fmt.Fprintf(&b, ", limited to %d documents", cfg.limit)
 	}
 	b.WriteString(".\n\n")
+
+	// The checksums and the commit, so that somebody who wants to argue with
+	// one of these numbers can start from the same bytes and the same code
+	// rather than from something that has the same name.
+	if r := first.Run; r != nil {
+		fmt.Fprintf(&b, "Run started %s.\n", r.Started.Format(time.RFC3339))
+		if r.CorpusSHA256 != "" {
+			fmt.Fprintf(&b, "Corpus sha256 %s, %d bytes.\n", r.CorpusSHA256, r.CorpusBytes)
+		}
+		if r.QueriesSHA256 != "" {
+			fmt.Fprintf(&b, "Queries sha256 %s.\n", r.QueriesSHA256)
+		}
+		switch {
+		case r.Commit != "" && r.Modified:
+			fmt.Fprintf(&b, "Built from %s with uncommitted changes, so this run is not reproducible from the commit alone.\n", r.Commit)
+		case r.Commit != "":
+			fmt.Fprintf(&b, "Built from %s.\n", r.Commit)
+		}
+		b.WriteString("\n")
+	}
 	return b.String()
 }
 
@@ -326,6 +423,30 @@ func hostSlug(host string) string {
 	if host == "" {
 		return "unknown"
 	}
+	return slug(host)
+}
+
+// corpusSlug is the corpus in the file name.
+//
+// It is there because without it two corpora on one machine write to the same
+// file, and the second run silently replaces the first. That is not a
+// hypothetical: a run over the mail corpus overwrote the committed results from
+// the source corpus on the first machine it was tried on, and the only reason
+// it was noticed is that git had the old ones.
+//
+// The name comes from the corpus file rather than from the label, because a
+// corpus assembled by hand has no label and still needs a name that is not the
+// same as everything else's.
+func corpusSlug(path string) string {
+	base := filepath.Base(path)
+	base = strings.TrimSuffix(base, filepath.Ext(base))
+	if base == "" || base == "." {
+		return "unknown"
+	}
+	return slug(base)
+}
+
+func slug(s string) string {
 	return strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
@@ -334,5 +455,5 @@ func hostSlug(host string) string {
 			return r + 32
 		}
 		return '-'
-	}, host)
+	}, s)
 }

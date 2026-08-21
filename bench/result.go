@@ -9,6 +9,7 @@
 // A runner is invoked as:
 //
 //	runner -corpus corpus.jsonl -queries queries.txt -work <dir> [-repeat n]
+//	       [-limit n] [-workers n] [-depth n] -phase index|query|all
 //
 // # What gets measured
 //
@@ -42,6 +43,21 @@ import (
 	"sort"
 	"time"
 )
+
+// DefaultDepth is how many results a search asks for unless a run says
+// otherwise.
+//
+// Ten is a page, and a page is what a latency number should be measured on
+// because it is what somebody waits for. A hundred is what a first stage
+// retriever has to return when something reranks behind it, and recall at a
+// hundred is the number that says whether the reranker had anything to work
+// with, since a document the first stage missed cannot be recovered by anything
+// downstream.
+//
+// It lives here rather than in the Go harness because the runners written in
+// other languages have to use the same number, and a constant that only one of
+// three implementations can see is not a contract.
+const DefaultDepth = 10
 
 // Result is what a runner writes to standard output.
 type Result struct {
@@ -77,6 +93,11 @@ type Result struct {
 	// Machine is where the numbers were taken. A result without it is a number
 	// nobody can compare against anything.
 	Machine Machine `json:"machine"`
+
+	// Run is the input and the code that produced these numbers. It is filled
+	// in by the orchestrator after the runner has written its result, so it is
+	// absent from the output of a runner invoked by hand.
+	Run *Run `json:"run,omitempty"`
 
 	// Notes is for anything that would otherwise make a number misleading, such
 	// as an engine that could not express one of the filters, or a phase that
@@ -139,6 +160,18 @@ type SearchPhase struct {
 	// cheaper than one that answers in fifty using one.
 	Usage Usage `json:"usage"`
 
+	// Depth is how many results each search asked for.
+	//
+	// It is recorded because a latency at a page of ten and a latency at a page
+	// of a hundred are different measurements, and because recall computed over
+	// these pages is recall at this number and at no other. Two result files
+	// that disagree here are not comparable, and without the field written down
+	// nothing downstream could tell.
+	//
+	// Zero means a result written before this was recorded, which was always a
+	// page of ten.
+	Depth int `json:"depth,omitempty"`
+
 	// Queries holds one entry per query in the set, measured one at a time.
 	Queries []QueryStat `json:"queries"`
 
@@ -178,6 +211,17 @@ type QueryStat struct {
 	P90MS    float64 `json:"p90_ms"`
 	P99MS    float64 `json:"p99_ms"`
 	MaxMS    float64 `json:"max_ms"`
+
+	// IDs is the page the engine returned, in the order it returned it. It
+	// comes from the warm up run rather than a timed one, so collecting it
+	// costs nothing a timing sees.
+	//
+	// Two things need it. A relevance score needs to know what came back and
+	// not just how many, and a latency comparison needs a way to check that two
+	// engines answered the same question, which the total alone does not
+	// establish. An engine can report the same total and return a different
+	// page, and until this field existed there was no way to see that.
+	IDs []string `json:"ids,omitempty"`
 }
 
 // ConcurrentStat is the query set run with several in flight.

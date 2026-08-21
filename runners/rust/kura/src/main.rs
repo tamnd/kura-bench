@@ -33,7 +33,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use benchrs::config::Config;
-use benchrs::{SEARCH_LIMIT, config, corpus, machine, result, usage};
+use benchrs::{config, corpus, machine, result, usage};
 
 use kura_core::index;
 use kura_core::search::Searcher;
@@ -227,7 +227,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     let segment = Segment::open_without_checksum(&map)?;
     let reader = index::Reader::open(&segment)?;
     let mut scratch = store::Scratch::new();
-    search_once(&reader, &queries[0], SEARCH_LIMIT, &mut scratch)?;
+    search_once(&reader, &queries[0], cfg.depth, &mut scratch, None)?;
     let open = usage::measure(&open_start);
     res.open = result::OpenPhase {
         resident_bytes: open.rss_bytes,
@@ -236,24 +236,33 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
 
     let search_start = usage::take();
     let mut stats = Vec::with_capacity(queries.len());
+    let mut ids = Vec::with_capacity(cfg.depth);
     for q in &queries {
         // One warm up that is not counted, because the first run of a query
         // pays for whatever the operating system has not faulted in yet and no
         // deployment sees that cost on every request.
-        let mut hits = search_once(&reader, q, SEARCH_LIMIT, &mut scratch)?;
+        //
+        // The page comes off this run for the same reason. Keeping the
+        // identifiers allocates, and the run that pays for it is the one whose
+        // time nobody reads.
+        ids.clear();
+        let mut hits = search_once(&reader, q, cfg.depth, &mut scratch, Some(&mut ids))?;
         let mut runs = Vec::with_capacity(cfg.repeat);
         for _ in 0..cfg.repeat {
             let t = Instant::now();
-            hits = search_once(&reader, q, SEARCH_LIMIT, &mut scratch)?;
+            hits = search_once(&reader, q, cfg.depth, &mut scratch, None)?;
             runs.push(t.elapsed().as_secs_f64() * 1000.0);
         }
-        stats.push(result::summarise(q, hits, runs));
+        let mut stat = result::summarise(q, hits, runs);
+        stat.ids.clone_from(&ids);
+        stats.push(stat);
     }
     let search = usage::measure(&search_start);
 
     let concurrent = concurrent_phase(&reader, &queries, cfg);
     res.search = result::SearchPhase {
         usage: search,
+        depth: cfg.depth,
         queries: stats,
         concurrent,
     };
@@ -274,11 +283,16 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
 /// same as the number returned. Both are asked for because every other engine
 /// here reports a total and a page, and dropping one would make the numbers
 /// describe different work.
+///
+/// `ids` collects the identifiers of the page when it is given. The stored
+/// fields are read either way, so the only extra work is copying the one that
+/// is already in hand.
 fn search_once(
     reader: &index::Reader<'_>,
     query: &str,
     limit: usize,
     scratch: &mut store::Scratch,
+    mut ids: Option<&mut Vec<String>>,
 ) -> kura_core::error::Result<usize> {
     let searcher = Searcher::new(reader);
     // A bare query is read as OR, which is how every other engine here is asked
@@ -293,7 +307,14 @@ fn search_once(
     if let Some(store) = reader.store() {
         for hit in &hits {
             let mut fields = store.get(hit.doc, scratch)?;
-            while fields.next_field()?.is_some() {}
+            while let Some((name, value)) = fields.next_field()? {
+                if name == "id"
+                    && let Some(out) = ids.as_deref_mut()
+                    && let Ok(text) = std::str::from_utf8(value)
+                {
+                    out.push(text.to_string());
+                }
+            }
         }
     }
     Ok(usize::try_from(total).unwrap_or(usize::MAX))
@@ -336,7 +357,7 @@ fn concurrent_phase(
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(q) = jobs.get(i) else { break };
                     let t = Instant::now();
-                    if search_once(reader, q, SEARCH_LIMIT, &mut scratch).is_err() {
+                    if search_once(reader, q, cfg.depth, &mut scratch, None).is_err() {
                         return None;
                     }
                     times.push(t.elapsed().as_secs_f64() * 1000.0);

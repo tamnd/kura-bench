@@ -41,6 +41,14 @@ Throughput in queries per second with a configurable number of workers, which is
 Incremental update.
 Reindexing five thousand documents into an index that is already open and already being searched, and what that does to the size on disk.
 
+Relevance, where the corpus came with judgments.
+Every result carries the page each query returned and not only how many documents matched, so the answers can be scored against what people judged relevant.
+nDCG at 10, MRR at 10, recall at the depth the page was, success at 1, and the share of returned documents anybody judged either way.
+Success at 1 is there because most enterprise search traffic is somebody who already knows which document they want, and for that person a relevant result at rank two is a failure that nDCG mostly forgives.
+The definitions are the ones trec_eval uses and there is a test that checks them against a run of trec_eval itself, because a relevance score that cannot be lined up against a published one is a score that only compares against itself.
+Every run also writes a file in the format trec_eval reads, so anybody who does not trust the arithmetic here can check it with the program everyone else uses.
+This runs on the passage collection, which arrives with a real query log and a judgment file, and it does not run on the source checkouts, because nobody has judged those queries and inventing judgments to have a number would be worse than having none.
+
 Machine.
 Every result carries the host, the CPU, the core count, the memory, the load average before the run started and the free memory at that moment.
 A run on a machine that was already busy is marked as not dedicated, and the report says so, because a number taken on a loaded box is worth reporting and is not worth comparing.
@@ -95,6 +103,7 @@ Text:
 | sqlitefts | Go | SQLite FTS5 through a pure Go driver, the thing most projects reach for first |
 | tantivy | Rust | A fast Lucene style index, the number worth being measured against |
 | seekstorm | Rust | A newer memory mapped index making strong latency claims, worth checking |
+| lucene | Java | What most enterprise search is actually running, since Elasticsearch and OpenSearch are this with a cluster around it |
 | genba | Go | Our own index, the reason the rest of this exists |
 
 Vector:
@@ -120,9 +129,18 @@ Everything else in the suite builds and runs without it, and a machine that skip
 
     make ladybug
 
+lucene needs a step of its own for the same reason, since it is a set of jars and a virtual machine rather than a module or a crate.
+`runners/java/lucene/fetch.sh` downloads the jars its pin names and checks each one against the sha256 in `runners/java/lucene/lucene.json`, and `make lucene` compiles the runner against them and writes the wrapper the orchestrator runs.
+A machine with no Java compiler gets a text table without that row rather than a failure.
+
+    make lucene
+
+Lucene 10 reads its memory mapped files through the foreign memory API, which is final from Java 22 and a preview before it, so an older virtual machine falls back to a slower path.
+Build it on 22 or later, or the number in the table is not the one people are getting.
+
 Each engine is a separate binary that speaks a small contract: create, load, flush, open, ask, close.
 Adding one is a hundred lines and does not touch the harness.
-The Go runners live under `runners/`, one directory each, and the Rust runners share a cargo workspace at `runners/rust` so that the same measuring code times all of them.
+The Go runners live under `runners/`, one directory each, the Rust runners share a cargo workspace at `runners/rust`, and the Java one is at `runners/java/lucene`, each language with one copy of the measuring code so that the same stopwatch times every engine written in it.
 A text runner is called `<engine>-runner`, a vector runner `<engine>-vecrunner` and a graph runner `<engine>-graphrunner`, all built into `bin/`, and each suite only ever picks up its own.
 
 Every engine is pinned to a version and `kura-versions` compares each pin against its registry.
@@ -169,6 +187,30 @@ Each one is a shallow fetch of a single commit, the checkout is verified against
 
 Building it is the slowest step in the repository and it only has to happen once per machine.
 
+Source code is one shape of text and it is not the only one an engine gets asked to hold.
+Three published corpora cover the other shapes, and each is downloaded rather than cloned:
+
+```sh
+bin/kura-corpus -datasets
+bin/kura-corpus -dataset enron -out enron.jsonl
+bin/kura-corpus -dataset msmarco -out msmarco.jsonl
+bin/kura-corpus -dataset simplewiki -out simplewiki.jsonl
+```
+
+The mail archive is half a million short documents with real threads, real quoting and the same message sitting in a dozen mailboxes, which is the duplication every real deployment has and no generated corpus does.
+The passage collection is nine million documents of a few dozen words each, which is the shape that stops a scorer's per document cost hiding behind its per posting cost, and it is the only one of these that arrives with real queries and the judgments to say which passage answered them.
+The encyclopaedia dump is long articles with the wiki markup left on, because an engine in front of a wiki is handed the wiki's own markup and a corpus that strips it measures something nobody runs.
+
+The download is checksummed against a pin in `corpus/datasets.go` for the same reason the source trees pin a commit, and an archive already on the machine with the right checksum is left alone.
+`-limit` takes the first n documents, which is useful on a machine without room for the whole thing and which makes the file a latency corpus rather than a relevance corpus, since a judged document past the cut cannot be retrieved.
+`kura-corpus -datasets` prints the licence position for each one, and one of the three is local use only.
+
+That last point is enforced rather than remembered.
+Every built corpus gets a small `<corpus>.dataset.json` beside it saying what it is and whether content from it may leave the machine, and `kura-bench` reads it before anything runs.
+For a corpus that may not, the result files carry the timings, the hit counts, the sizes and the query text, and not the list of documents each engine returned.
+That list is the one field in a result file that can identify a person, since the mail corpus names its documents by mailbox path, and a result file is exactly the kind of thing somebody commits without thinking about it.
+A corpus with no label beside it is treated as restricted and says so on stderr, which is the wrong answer for most corpora and the right default anyway: being wrong that way costs a rerun, and being wrong the other way puts a real person's name in a public history, which no later commit undoes.
+
 For trying something out there are two other forms, which do not produce a comparable result and are not meant to:
 
 ```sh
@@ -187,7 +229,7 @@ The JSON is the record, the markdown is what a person reads.
 
 Useful flags:
 
-- `-engines bleve,genba` runs a subset instead of everything found in `-bin`.
+- `-engines bleve,genba` runs a subset instead of everything found in `-bin`, in the order it names them, so an engine that takes hours to index can be put last instead of holding up the results you are actually waiting on. Without the flag the order is alphabetical. Naming an engine that has no runner fails immediately rather than after the rest of the run.
 - `-limit 200000` stops after that many documents, which is how a shared machine gets a run that finishes.
 - `-repeat 50` runs each query that many times, the default is twenty.
 - `-workers 16` sets the concurrency for the several-in-flight phase, the default is the core count.
@@ -290,6 +332,68 @@ It runs no engines and opens no network connections, so it is safe to run on a l
 There are very common terms that match most of the corpus, ordinary two and three word queries, rare identifiers that match a handful of documents, prose terms that only appear in documentation, and one worst case single word.
 An engine that is quick on rare terms and slow on common ones has a different problem from one that is uniformly slow, and an average would hide both.
 
+Two lines of it are not comparable across engines and are kept anyway.
+`mmap_region` and `tsan_atomic` are split on the underscore by every engine here when it indexes, so they all hold the same documents, but they disagree about what the query means: some read the two halves as an OR and match thousands of documents, and some read them as a phrase and match none.
+That is a real disagreement about a real query shape, since internal jargon and product codenames are written with underscores and people type them into search boxes.
+The latency on those two lines is two different questions being answered rather than one engine beating another, and the file says so where somebody reading the query set will see it.
+
+That file is about source code, because the checkouts are.
+Running it against mail or an encyclopaedia would measure a dictionary miss and call it a search, so each downloaded corpus gets its own set from `kura-queries`.
+
+```
+bin/kura-queries -corpus enron.jsonl -out queries-enron.txt
+bin/kura-queries -log queries.dev.small.tsv -n 40 -out queries-msmarco.txt
+```
+
+`-log` is the honest one and is used wherever a real log came down with the corpus, which for the passage collection means real search queries typed by real people.
+`-corpus` is for the corpora that arrive without one.
+It reads the corpus, counts how many documents each term is in, and picks from four bands of document frequency, because document frequency is what decides what a query costs an engine.
+Terms tied on frequency are walked at a stride rather than taken adjacently, so a band does not come out as three words that happen to sit next to each other in the dictionary.
+It also picks a few two word queries from adjacent pairs where both halves are common, since a query that is cheap word by word and expensive together is the case an engine either skips through or does not.
+The header of a generated file says it was constructed rather than logged, because a constructed query set tells you about latency and nothing about relevance.
+
+## Scoring the answers
+
+A latency number says how fast an engine answered.
+It does not say whether it answered.
+An engine that returns the wrong ten documents in a tenth of the time has not won anything, and a table of medians is the easiest place in the world to hide that.
+
+```
+make textset TEXTSET=msmarco
+make textbench TEXTSET=msmarco
+bin/kura-relevance -results results -runs runs -out scores.json
+```
+
+The passage collection is the corpus that makes this possible, because it comes with a query log and a judgment file rather than only documents.
+The runners report the identifiers of the page they returned alongside the timings, collected on the warm up run so that no timed run pays for it, and the scorer matches those against the judgments.
+
+Two things it prints are worth reading before the scores.
+Recall is at the depth of the page, which is ten by default, and not the hundred a paper quotes, so it is a much harder number and the two are not comparable.
+Recall at a hundred is the one that says whether a first stage retriever gave a reranker anything to work with, since a document the first stage missed cannot be recovered by anything downstream, and to get it the query phase has to be rerun asking for a deeper page.
+
+```
+make textbench TEXTSET=msmarco DEPTH=100
+make relevance DEPTH=100
+```
+
+The depth is a flag on the whole run rather than a deeper untimed probe alongside shallow timed runs, because the second arrangement warms caches that the timed runs then benefit from and the bias would not show up anywhere in the output.
+So a run at a hundred has honest recall and latencies that belong to a page of a hundred, and the report says so above the search table rather than leaving it in a JSON field.
+The scorer refuses to quietly compute recall at a depth the engines were never asked to fill, and says which ones came up short.
+Judged coverage is the share of returned documents anybody looked at, and when it is low the scores are mostly measuring how much an engine agrees with the systems that were in the pool when the judgments were made, rather than how good it is.
+
+`-runs` writes a run file per engine in the format every existing evaluation tool reads.
+That is there so somebody who does not believe these numbers can check them with a different program, which is the property that makes them worth reporting at all.
+
+`-out` writes the scores as JSON, and `-baseline` checks a fresh scores file against an earlier one and exits nonzero when nDCG has fallen by more than the tolerance.
+
+```
+bin/kura-relevance -results results -out scores.json -baseline baseline/msmarco.json
+```
+
+The tolerance lives in the baseline file rather than on the command line, because it describes how much these particular numbers move between two runs that changed nothing, and the only way to know that is to run the same benchmark several times and look at the spread.
+A baseline with no tolerance in it is refused rather than treated as a demand for identical scores, since a gate that fails on noise is a gate people learn to ignore.
+There is no baseline committed here yet, because measuring that spread needs the passage collection to have run more than once on one machine, and until it has, any number put in that field would be a guess wearing the clothes of a measurement.
+
 ## Reading a result
 
 Two things are worth knowing before comparing numbers from two files.
@@ -300,6 +404,11 @@ What is reported is the peak as it stood at the end of each phase, and the repor
 Some engines have no on disk form.
 The genba runner today uses an in memory store, so its open phase is a full reindex from the corpus.
 That is the honest cold start for an in memory store rather than a favour done to it, and it is written down in the result notes rather than left for somebody to work out.
+
+Each result carries a `run` block holding the SHA-256 of the corpus and of the query file, the commit the orchestrator was built from, when the run started, and every parameter it was given.
+The point is that somebody who wants to argue with a number can start from the same bytes and the same code rather than from something that happens to have the same name.
+Two files whose corpus digests differ are not a comparison no matter how similar the tables look, and the commit is read out of the build information rather than by asking git, because the binary that produced the numbers is the fact worth recording and the checkout beside it may have moved on.
+A binary built from a modified tree says so, since a run from an uncommitted tree cannot be reproduced from the commit alone.
 
 ## Continuous integration
 

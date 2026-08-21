@@ -276,6 +276,13 @@ func writeColdStart(b *strings.Builder, rs []Result) {
 
 func writeSearch(b *strings.Builder, rs []Result) {
 	fmt.Fprintf(b, "## Search, one query at a time\n\n")
+	// Only when it is not a page, because a page is what everybody assumes and
+	// a line saying so on every report is a line people stop reading. A deeper
+	// one changes what the latencies mean and has to be in front of the table
+	// rather than in a JSON field.
+	if d := searchDepth(rs); d > 0 && d != DefaultDepth {
+		fmt.Fprintf(b, "Each search asked for %d results rather than a page of %d, so these latencies are not comparable with a run at the default depth.\n\n", d, DefaultDepth)
+	}
 	b.WriteString("| engine | median | p90 | p99 | CPU ms per query | peak RSS |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, r := range rs {
@@ -291,6 +298,26 @@ func writeSearch(b *strings.Builder, rs []Result) {
 			r.CPUMillisPerQuery(), mb(r.Search.Usage.PeakRSSBytes))
 	}
 	b.WriteString("\n")
+}
+
+// searchDepth is the depth these results were measured at, or zero when they
+// disagree or none of them recorded one.
+//
+// Disagreement returns zero rather than a majority, because a report built out
+// of two different depths is one whose search table should not be read as a
+// comparison at all, and picking a number for it would hide that.
+func searchDepth(rs []Result) int {
+	depth := 0
+	for _, r := range rs {
+		if r.Search.Depth == 0 {
+			continue
+		}
+		if depth != 0 && depth != r.Search.Depth {
+			return 0
+		}
+		depth = r.Search.Depth
+	}
+	return depth
 }
 
 func writeConcurrency(b *strings.Builder, rs []Result) {

@@ -101,6 +101,53 @@ jobs:
       - name: cargo test
         run: cargo test
 
+  # The Lucene runner, which is the only one here that needs a Java compiler.
+  #
+  # It fetches the pinned jars, builds, and then does a real run against a
+  # corpus built from this checkout, because a compile check would pass on a
+  # runner that writes a result nobody can read. The result is parsed back and
+  # the fields that have to be there are asserted, since the contract between a
+  # runner and the orchestrator is a JSON shape and nothing enforces it at
+  # build time.
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+      # Lucene 10 reads its memory mapped files through the foreign memory API,
+      # which is final from Java 22 and a preview before it. On an older
+      # virtual machine it falls back to a slower path, so the version here is
+      # one where the fast path is the one being measured.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: fetch the pinned jars and build
+        run: make lucene
+      - name: build a corpus from this checkout
+        run: |
+          go build -o bin/kura-corpus ./cmd/kura-corpus
+          ./bin/kura-corpus -repo kura-bench=. -out corpus.jsonl
+      - name: index and query
+        run: |
+          ./bin/lucene-runner -corpus corpus.jsonl -work /tmp/lucene -phase index -repeat 3 > index.json
+          ./bin/lucene-runner -corpus corpus.jsonl -queries queries.txt -work /tmp/lucene -phase query -repeat 3 > query.json
+      - name: the result says what the orchestrator needs it to say
+        run: |
+          jq -e '.engine == "lucene" and .language == "java" and .corpus.documents > 0 and .index.bytes > 0' index.json
+          jq -e '.open.usage.wall_seconds > 0 and (.search.queries | length) > 0' query.json
+          # A query set where nothing matched would report perfect latencies for
+          # an engine that answered nothing, which is the failure this catches.
+          jq -e '[.search.queries[].hits] | add > 0' query.json
+          # The page has to come back with the timings, because the relevance
+          # scorer has nothing to score without it.
+          jq -e '[.search.queries[] | select((.ids | length) > 0)] | length > 0' query.json
+          jq -r '"lucene \(.version) indexed \(.corpus.documents) documents"' index.json
+
   # A real run, on real files, on every pull request.
   #
   # The corpus is this checkout, which is small enough to finish in a minute and

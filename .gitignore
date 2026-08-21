@@ -31,3 +31,9 @@
 *.swp
 .idea/
 .vscode/
+
+# The Lucene jars and the classes compiled against them, which fetch.sh
+# downloads at the version and the checksums pinned in
+# runners/java/lucene/lucene.json. The pin is committed and the jars are not.
+/runners/java/lucene/[0-9]*/
+/runners/java/lucene/classes/
