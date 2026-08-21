@@ -220,7 +220,7 @@ impl Csr {
         ids.dedup();
 
         let mut offset = vec![0u64; ids.len() + 1];
-        for pair in edges.chunks_exact(2) {
+        for pair in edges.as_chunks::<2>().0 {
             offset[index_of(&ids, pair[0]) as usize + 1] += 1;
         }
         for i in 1..offset.len() {
@@ -231,7 +231,7 @@ impl Csr {
         // survive, which is cheaper than rebuilding them afterwards.
         let mut cursor = offset[..ids.len()].to_vec();
         let mut target = vec![0u32; edges.len() / 2];
-        for pair in edges.chunks_exact(2) {
+        for pair in edges.as_chunks::<2>().0 {
             let from = index_of(&ids, pair[0]) as usize;
             target[cursor[from] as usize] = index_of(&ids, pair[1]);
             cursor[from] += 1;
@@ -499,8 +499,10 @@ fn read_u32(f: &mut impl Read, count: usize) -> std::io::Result<Vec<u32>> {
     let mut raw = vec![0u8; count * 4];
     f.read_exact(&mut raw)?;
     Ok(raw
-        .chunks_exact(4)
-        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| u32::from_le_bytes(*c))
         .collect())
 }
 
@@ -508,7 +510,9 @@ fn read_u64(f: &mut impl Read, count: usize) -> std::io::Result<Vec<u64>> {
     let mut raw = vec![0u8; count * 8];
     f.read_exact(&mut raw)?;
     Ok(raw
-        .chunks_exact(8)
-        .map(|c| u64::from_le_bytes(c.try_into().unwrap()))
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .map(|c| u64::from_le_bytes(*c))
         .collect())
 }

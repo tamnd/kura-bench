@@ -221,7 +221,7 @@ impl Pet {
         for _ in 0..ids.len() {
             graph.add_node(());
         }
-        for pair in edges.chunks_exact(2) {
+        for pair in edges.as_chunks::<2>().0 {
             let from = ids
                 .binary_search(&pair[0])
                 .expect("edge endpoint is a node");
@@ -450,8 +450,10 @@ fn read_edges(path: &Path) -> Result<(bool, Vec<u32>), Box<dyn std::error::Error
     f.read_exact(&mut raw)?;
     Ok((
         undirected,
-        raw.chunks_exact(4)
-            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        raw.as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| u32::from_le_bytes(*c))
             .collect(),
     ))
 }

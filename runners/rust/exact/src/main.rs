@@ -256,8 +256,11 @@ impl Flat {
         let mut raw = vec![0u8; count * dim * 4];
         f.read_exact(&mut raw)?;
         let mut values = Vec::with_capacity(count * dim);
-        for chunk in raw.chunks_exact(4) {
-            values.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+        // as_chunks hands back whole four byte arrays, so from_le_bytes
+        // takes each one directly and the loop that reads half a gigabyte has
+        // no fallible conversion in it.
+        for chunk in raw.as_chunks::<4>().0 {
+            values.push(f32::from_le_bytes(*chunk));
         }
 
         let mut norms = Vec::new();
@@ -412,8 +415,10 @@ impl Search for Flat {
 /// implementation has it, so leaving it out would make the baseline slower than
 /// the thing it is meant to be a baseline for.
 fn squared(a: &[f32], b: &[f32], worst: f32) -> Option<f32> {
+    let (blocks_a, tail_a) = a.as_chunks::<8>();
+    let (blocks_b, tail_b) = b.as_chunks::<8>();
     let mut sum = 0.0f32;
-    for (chunk_a, chunk_b) in a.chunks_exact(8).zip(b.chunks_exact(8)) {
+    for (chunk_a, chunk_b) in blocks_a.iter().zip(blocks_b) {
         for i in 0..8 {
             let d = chunk_a[i] - chunk_b[i];
             sum += d * d;
@@ -422,8 +427,11 @@ fn squared(a: &[f32], b: &[f32], worst: f32) -> Option<f32> {
             return None;
         }
     }
-    for i in (a.len() - a.len() % 8)..a.len() {
-        let d = a[i] - b[i];
+    // as_chunks gives back the leftover beside the whole blocks, so the tail is
+    // the slice it handed over rather than an offset worked out from the length
+    // a second time.
+    for (x, y) in tail_a.iter().zip(tail_b) {
+        let d = x - y;
         sum += d * d;
     }
     if sum >= worst { None } else { Some(sum) }
@@ -498,6 +506,56 @@ mod tests {
     fn agreeing_with_the_ground_truth_leaves_nothing_to_explain() {
         let index = flat(1, &[&[0.0], &[9.0]]);
         assert_eq!(disagreements(&index, &[0.0], &[0], 1, &[0], 1, 1), (0, 0));
+    }
+
+    /// The plainest squared euclidean distance there is, with no blocking and
+    /// no early abandoning, for [`squared`] to be checked against.
+    fn plainly(a: &[f32], b: &[f32]) -> f32 {
+        a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum()
+    }
+
+    /// squared reads its input eight values at a time and finishes whatever is
+    /// left over separately, so the lengths that matter are the ones either
+    /// side of a multiple of eight. Every recall figure in the vector suite is
+    /// scored against this function, so a distance that is wrong for one
+    /// dimension count would not look like a bug, it would look like every
+    /// other engine having got better.
+    #[test]
+    fn the_blocked_distance_agrees_with_the_plain_one_at_every_length() {
+        for dim in 1..40usize {
+            let a: Vec<f32> = (0..dim).map(|i| i as f32 * 0.5).collect();
+            let b: Vec<f32> = (0..dim).map(|i| 3.0 - i as f32 * 0.25).collect();
+            let want = plainly(&a, &b);
+            let got = squared(&a, &b, f32::INFINITY).expect("nothing to abandon against");
+            assert!(
+                (got - want).abs() <= want.abs() * 1e-5,
+                "dim {dim}: blocked {got}, plain {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_distance_past_the_worst_worth_keeping_is_abandoned() {
+        let a = vec![0.0f32; 24];
+        let mut b = vec![0.0f32; 24];
+        b[20] = 10.0;
+        assert_eq!(
+            squared(&a, &b, 1.0),
+            None,
+            "a hundred is past a worst of one"
+        );
+        assert_eq!(squared(&a, &b, 1000.0), Some(100.0));
+    }
+
+    /// The early abandon check runs at the end of each whole block, so a
+    /// distance that only crosses the threshold in the leftover has to be
+    /// caught after the loop rather than inside it.
+    #[test]
+    fn a_distance_that_only_crosses_the_threshold_in_the_leftover_is_still_abandoned() {
+        let a = vec![0.0f32; 9];
+        let mut b = vec![0.0f32; 9];
+        b[8] = 5.0;
+        assert_eq!(squared(&a, &b, 10.0), None);
     }
 
     #[test]
