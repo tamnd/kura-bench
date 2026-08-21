@@ -105,8 +105,11 @@ pub fn edges(path: &Path) -> io::Result<(Header, Vec<u32>)> {
     f.read_exact(&mut raw)?;
 
     let mut out = Vec::with_capacity(count * 2);
-    for chunk in raw.chunks_exact(4) {
-        out.push(u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+    // as_chunks gives back whole four byte arrays rather than slices, so
+    // from_le_bytes takes them directly and there is no fallible conversion in
+    // the loop.
+    for chunk in raw.as_chunks::<4>().0 {
+        out.push(u32::from_le_bytes(*chunk));
     }
     Ok((h, out))
 }
@@ -122,8 +125,10 @@ pub fn seeds(path: &Path) -> io::Result<Vec<u32>> {
         )));
     }
     Ok(raw
-        .chunks_exact(4)
-        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| u32::from_le_bytes(*c))
         .collect())
 }
 

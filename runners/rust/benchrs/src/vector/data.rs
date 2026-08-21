@@ -70,8 +70,11 @@ pub fn read_shape(path: &Path, elem: usize) -> io::Result<Shape> {
 pub fn fvecs(path: &Path, limit: usize) -> io::Result<(Shape, Vec<f32>)> {
     let (shape, raw) = read(path, limit)?;
     let mut out = Vec::with_capacity(shape.count * shape.dim);
-    for chunk in raw.chunks_exact(4) {
-        out.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+    // as_chunks gives back whole four byte arrays rather than slices, so
+    // from_le_bytes takes them directly and there is no fallible conversion in
+    // the loop that reads half a gigabyte.
+    for chunk in raw.as_chunks::<4>().0 {
+        out.push(f32::from_le_bytes(*chunk));
     }
     Ok((shape, out))
 }
@@ -82,8 +85,8 @@ pub fn fvecs(path: &Path, limit: usize) -> io::Result<(Shape, Vec<f32>)> {
 pub fn ivecs(path: &Path, limit: usize) -> io::Result<(Shape, Vec<i32>)> {
     let (shape, raw) = read(path, limit)?;
     let mut out = Vec::with_capacity(shape.count * shape.dim);
-    for chunk in raw.chunks_exact(4) {
-        out.push(i32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+    for chunk in raw.as_chunks::<4>().0 {
+        out.push(i32::from_le_bytes(*chunk));
     }
     Ok((shape, out))
 }
