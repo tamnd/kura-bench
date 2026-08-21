@@ -267,6 +267,9 @@ async fn query_phase(
         usage: search,
         queries: stats,
         concurrent,
+        // SeekStorm keeps its index behind its own handle, so the runner has no
+        // slice to take a reading over. Absent rather than zero.
+        residency: None,
     };
     res.update = update_phase(cfg, &index).await;
     Ok(())

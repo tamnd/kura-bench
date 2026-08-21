@@ -146,6 +146,63 @@ type SearchPhase struct {
 	// is what a throughput figure has to come from. Serial latency divided into
 	// one second is a number that no deployment has ever achieved.
 	Concurrent *ConcurrentStat `json:"concurrent,omitempty"`
+
+	// Residency is how much of the index the serial phase had to fetch, for the
+	// engines that can say. Most cannot, so it is usually absent.
+	Residency *Residency `json:"residency,omitempty"`
+}
+
+// Residency is what the query set actually touched of a mapped index.
+//
+// A latency figure does not say whether an engine answered out of memory or out
+// of storage, and on a machine with enough memory to hold the whole index every
+// engine here looks like it answers out of memory. This is the counter that
+// tells the two apart: an index that was cold before the phase and faulted a
+// few hundred pages during it is reading the parts of the file it needs, and one
+// that faulted its whole length is reading the file.
+//
+// Every field is a pointer because a platform that will not answer has to be
+// distinguishable from one that answered zero. A zero here reads as a fact and
+// would be believed.
+type Residency struct {
+	// Faults is how many page faults the phase took over the index, of either
+	// kind, and FaultsFromDisk is how many of those needed a read. The gap
+	// between them is the difference between microseconds and milliseconds.
+	Faults         *uint64 `json:"faults,omitempty"`
+	FaultsFromDisk *uint64 `json:"faults_from_disk,omitempty"`
+
+	// ResidentBefore is how many bytes of the index were already in memory when
+	// the phase started, and Total is how many bytes the index is. The ratio is
+	// what says whether a warm number is warm because the engine is good or
+	// because the previous phase read the file.
+	ResidentBefore *uint64 `json:"resident_before,omitempty"`
+	Total          uint64  `json:"total"`
+
+	// Page is the page size, which is what turns a fault count into bytes.
+	Page uint64 `json:"page"`
+
+	// Note says why something above is missing, when something is.
+	Note string `json:"note,omitempty"`
+}
+
+// FaultedBytes is a floor rather than an exact figure, because one fault can
+// bring in more than one page. A file backed mapping takes page sized faults on
+// every platform this suite builds for, so for an index the floor and the answer
+// are the same number, but it is worth knowing which one is being read.
+func (r Residency) FaultedBytes() (uint64, bool) {
+	if r.Faults == nil {
+		return 0, false
+	}
+	return *r.Faults * r.Page, true
+}
+
+// WarmFraction is how much of the index was resident before the phase, from
+// zero for a cold file to one for a fully warm one.
+func (r Residency) WarmFraction() (float64, bool) {
+	if r.ResidentBefore == nil || r.Total == 0 {
+		return 0, false
+	}
+	return float64(min(*r.ResidentBefore, r.Total)) / float64(r.Total), true
 }
 
 // UpdatePhase is an incremental reindex over an already built index.
