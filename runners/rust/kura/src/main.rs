@@ -36,6 +36,7 @@ use benchrs::config::Config;
 use benchrs::{SEARCH_LIMIT, config, corpus, machine, result, usage};
 
 use kura_core::index;
+use kura_core::residency;
 use kura_core::search::Searcher;
 use kura_core::segment::Segment;
 use kura_core::store;
@@ -234,6 +235,14 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         usage: open,
     };
 
+    // What the serial phase faults in, measured over the mapped segment rather
+    // than over the process. A resident set figure covers the binary, the heap
+    // and every other mapping the runner has, and the question here is how much
+    // of the index a query had to fetch. The probe is started after the open
+    // phase on purpose: the open phase answered a query, so some of the file is
+    // already resident, and resident_before is what says how much.
+    let probe = residency::Probe::start(&map);
+
     let search_start = usage::take();
     let mut stats = Vec::with_capacity(queries.len());
     for q in &queries {
@@ -250,13 +259,33 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         stats.push(result::summarise(q, hits, runs));
     }
     let search = usage::measure(&search_start);
+    // Read before the concurrent phase runs, because that phase walks the same
+    // query set again on every core and would fold its faults into a figure the
+    // report prints next to a serial latency.
+    let touched = probe.finish();
 
     let concurrent = concurrent_phase(&reader, &queries, cfg);
     res.search = result::SearchPhase {
         usage: search,
         queries: stats,
         concurrent,
+        residency: Some(result::Residency {
+            faults: touched.faults,
+            faults_from_disk: touched.faults_from_disk,
+            resident_before: touched.resident_before,
+            total: touched.total,
+            page: touched.page,
+            note: touched.note.unwrap_or_default().to_string(),
+        }),
     };
+    if let (Some(faults), Some(before)) = (touched.faulted(), touched.resident_before) {
+        eprintln!(
+            "the query set faulted at least {:.1} MB of a {:.1} MB index that was {:.0}% resident when it started",
+            faults as f64 / (1 << 20) as f64,
+            touched.total as f64 / (1 << 20) as f64,
+            before as f64 / touched.total.max(1) as f64 * 100.0,
+        );
+    }
     // No update phase. See the note at the top of the file. The note is set
     // here rather than in run, because the harness runs the phases as separate
     // processes and merges the two results, and a note set in both would be

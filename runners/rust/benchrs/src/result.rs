@@ -52,6 +52,27 @@ pub struct SearchPhase {
     pub queries: Vec<QueryStat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrent: Option<ConcurrentStat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub residency: Option<Residency>,
+}
+
+/// What the query set touched of a mapped index.
+///
+/// Every count is optional because a platform that will not answer has to look
+/// different from one that answered zero. See the Go side of this contract for
+/// what the fields mean and why the distinction matters.
+#[derive(Serialize, Default)]
+pub struct Residency {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub faults: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub faults_from_disk: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resident_before: Option<u64>,
+    pub total: u64,
+    pub page: u64,
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub note: String,
 }
 
 #[derive(Serialize, Default)]

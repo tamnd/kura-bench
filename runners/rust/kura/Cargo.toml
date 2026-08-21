@@ -13,5 +13,5 @@ serde_json.workspace = true
 # Pinned to a commit rather than a branch, because a benchmark that moves when
 # the engine moves cannot be compared against the run before it. Bumping this is
 # a change with a number attached.
-kura-core = { git = "https://github.com/tamnd/kura", rev = "cfd1da3b385ead2cbfad8cd9bb13cac9e0d570cd" }
+kura-core = { git = "https://github.com/tamnd/kura", rev = "d9dded4aee6231458078604ce64bb1bd60fc2255" }
 memmap2 = "0.9.9"

@@ -204,6 +204,10 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         usage: search,
         queries: stats,
         concurrent,
+        // Tantivy owns its own mapping and does not expose the bytes, so there
+        // is nothing here to take a reading over. Left absent rather than
+        // reported as zero, which would read as a warm index.
+        residency: None,
     };
     res.update = update_phase(cfg, &index, &fields)?;
     Ok(())

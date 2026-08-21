@@ -82,6 +82,7 @@ func Report(results []Result) string {
 	writeStorage(&b, sorted)
 	writeColdStart(&b, sorted)
 	writeSearch(&b, sorted)
+	writeResidency(&b, sorted)
 	writeConcurrency(&b, sorted)
 	writeUpdates(&b, sorted)
 	writePerQuery(&b, sorted)
@@ -291,6 +292,56 @@ func writeSearch(b *strings.Builder, rs []Result) {
 			r.CPUMillisPerQuery(), mb(r.Search.Usage.PeakRSSBytes))
 	}
 	b.WriteString("\n")
+}
+
+// writeResidency says how much of the index the query set actually read.
+//
+// The section exists because the table above it is not comparable across
+// machines without it. A median of a tenth of a millisecond on a machine with
+// enough memory to hold the index is a page cache measurement, and the same
+// engine on a machine that has to go to storage for every block will report
+// something else entirely. The counters here are what tell the two apart, and
+// an engine that reports none of them is left out rather than shown as zero.
+func writeResidency(b *strings.Builder, rs []Result) {
+	rows := make([]string, 0, len(rs))
+	for _, r := range rs {
+		if !r.searched() || r.Search.Residency == nil {
+			continue
+		}
+		res := *r.Search.Residency
+		faulted, ok := res.FaultedBytes()
+		if !ok {
+			continue
+		}
+		fromDisk := "not reported"
+		if res.FaultsFromDisk != nil {
+			fromDisk = mb(int64(*res.FaultsFromDisk * res.Page))
+		}
+		warm := "not reported"
+		if fraction, ok := res.WarmFraction(); ok {
+			warm = fmt.Sprintf("%.0f%%", fraction*100)
+		}
+		rows = append(rows, fmt.Sprintf("| %s | %s | %s | %s | %s | %s |",
+			r.Engine, mb(int64(res.Total)), warm, mb(int64(faulted)), fromDisk,
+			percent(float64(faulted), float64(res.Total))))
+	}
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "## What the query set read\n\n")
+	b.WriteString("| engine | index | resident before | faulted in | of that, from storage | share of index read |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
+	fmt.Fprintf(b, "%s\n", strings.Join(rows, "\n"))
+	b.WriteString("\nFaulted in is a floor, because one fault can bring in more than one page.\n")
+	b.WriteString("An index that was already resident and faulted nothing from storage means the latencies above were answered out of memory, which is the best case and not the only case.\n\n")
+}
+
+// percent renders a share of a whole, and says so rather than dividing by zero.
+func percent(part, whole float64) string {
+	if whole <= 0 {
+		return "unknown"
+	}
+	return fmt.Sprintf("%.1f%%", part/whole*100)
 }
 
 func writeConcurrency(b *strings.Builder, rs []Result) {

@@ -205,3 +205,86 @@ func withCores(r Result, cores int) Result {
 	r.Machine.Cores = cores
 	return r
 }
+
+// The defect this was written for: every engine here answers in a fraction of a
+// millisecond on a machine with enough memory to hold the index, and the report
+// gave a reader no way to tell that from an engine that would answer in a
+// fraction of a millisecond on a machine that has to go to storage.
+func TestTheReportSaysHowMuchOfTheIndexAQuerySetRead(t *testing.T) {
+	faults, fromDisk, before := uint64(386), uint64(0), uint64(208<<20)
+	warm := indexedAndSearched("kura")
+	warm.Search.Residency = &Residency{
+		Faults:         &faults,
+		FaultsFromDisk: &fromDisk,
+		ResidentBefore: &before,
+		Total:          208 << 20,
+		Page:           16384,
+	}
+
+	body := section(t, Report([]Result{warm, indexedAndSearched("tantivy")}), "## What the query set read")
+	for _, want := range []string{"| kura |", "100%", "6.0 MB", "none", "2.9%"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the section does not contain %q:\n%s", want, body)
+		}
+	}
+	// An engine that cannot take the reading is absent. A zero here would read
+	// as an engine that answered every query without touching its index.
+	if strings.Contains(body, "tantivy") {
+		t.Errorf("an engine that reported nothing was given a row:\n%s", body)
+	}
+}
+
+// A run where no engine could take the reading should not print an empty table
+// with a paragraph under it explaining what the empty table would have meant.
+func TestARunWhereNobodyCountedFaultsHasNoSection(t *testing.T) {
+	got := Report([]Result{indexedAndSearched("tantivy")})
+	if strings.Contains(got, "## What the query set read") {
+		t.Errorf("an empty section was written anyway:\n%s", got)
+	}
+}
+
+// A platform that counts faults but will not say which of them went to storage
+// has to look different from one that went to storage zero times, because the
+// second is a result and the first is a gap in the measurement.
+func TestAPlatformThatWillNotSplitTheFaultsSaysSoRatherThanReportingNone(t *testing.T) {
+	faults := uint64(1024)
+	r := indexedAndSearched("kura")
+	r.Search.Residency = &Residency{Faults: &faults, Total: 64 << 20, Page: 4096}
+
+	body := section(t, Report([]Result{r}), "## What the query set read")
+	if strings.Contains(body, "| none |") {
+		t.Errorf("a missing count was reported as zero:\n%s", body)
+	}
+	for _, want := range []string{"not reported", "4.0 MB"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the section does not contain %q:\n%s", want, body)
+		}
+	}
+}
+
+// Page rounding puts resident_before a page or two over the length of the file,
+// because the last page of a mapping is resident in whole and the file ends
+// partway through it. A warm index is warm, not a hundred and one percent warm.
+func TestAnIndexResidentToTheLastPageIsNotMoreThanFullyWarm(t *testing.T) {
+	before := uint64(218_038_272)
+	r := Residency{ResidentBefore: &before, Total: 218_036_773, Page: 16384}
+	got, ok := r.WarmFraction()
+	if !ok {
+		t.Fatal("a reading with both numbers in it declined to give a fraction")
+	}
+	if got != 1 {
+		t.Errorf("a fully resident index reported %v of itself resident, want 1", got)
+	}
+}
+
+// An engine that reported a reading over an index of no length would divide by
+// zero, and the answer people would read off it is that the index was cold.
+func TestAnEmptyIndexDeclinesTheFractionRatherThanGuessingIt(t *testing.T) {
+	before := uint64(0)
+	if _, ok := (Residency{ResidentBefore: &before}).WarmFraction(); ok {
+		t.Error("an index of no length was given a warm fraction")
+	}
+	if _, ok := (Residency{Total: 1 << 20, Page: 4096}).FaultedBytes(); ok {
+		t.Error("a reading with no fault count was given a byte count")
+	}
+}
