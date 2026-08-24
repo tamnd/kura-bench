@@ -49,9 +49,9 @@ use std::time::Instant;
 use benchrs::config::Config;
 use benchrs::{SEARCH_LIMIT, UPDATE_DOCUMENTS, config, corpus, machine, result, usage};
 
-use kura_core::file::{Appending, Store};
+use kura_core::file::{Appending, Store, Trouble};
 use kura_core::index;
-use kura_core::ingest::{self, Batch, Prepared};
+use kura_core::ingest;
 use kura_core::residency;
 use kura_core::search::Searcher;
 use kura_core::store;
@@ -383,111 +383,82 @@ fn update_threads() -> usize {
 /// new segment and the deletions in one go, so there is no window in which both
 /// copies are visible and none in which neither is.
 ///
-/// There is a batch per thread and one commit at the end. A batch is a single
-/// threaded thing, and an update phase that ran on one thread would be measured
-/// against engines whose updates do not: Tantivy hands its replacements to the
-/// same writer pool its index phase uses. Every batch prepares against the same
-/// view, each one takes a share of the documents, and the whole group is
-/// published in one commit, so what a query sees is still one update rather
-/// than as many as there are threads.
+/// There is a batch per thread and one commit at the end, which is what
+/// `ingest::spread` does. A batch is a single threaded thing, and an update
+/// phase that ran on one thread would be measured against engines whose updates
+/// do not: Tantivy hands its replacements to the same writer pool its index
+/// phase uses. Every batch prepares against the same view, each one takes a
+/// share of the documents, and the whole group is published in one commit, so
+/// what a query sees is still one update rather than as many as there are
+/// threads.
+///
+/// This runner is where that call came from. It was thirty lines of channel and
+/// scope here, the third copy of the same thirty lines, and a runner whose
+/// subject is measuring an engine is a bad place to keep them: the thing being
+/// timed should be the engine's, or the number is about this file.
 ///
 /// The set is not committed halfway through on purpose. A batch that filled and
 /// flushed would be two commits, and the rivals here are timed on one, so this
 /// measures the same shape. The memory that costs is in the peak the phase
-/// reports.
+/// reports, and the queues in front of the workers are bounded, so the corpus
+/// reader cannot run ahead of the analysers and add to it.
 ///
 /// It leaves as many segments as it had threads, where a single batch would
 /// leave one, and that shows in the on disk figure and in what the next query
 /// walks.
-///
 fn update_phase(
     cfg: &Config,
     mut store: Store,
 ) -> Result<result::UpdatePhase, Box<dyn std::error::Error>> {
     let want = cfg.capped(UPDATE_DOCUMENTS);
     let threads = update_threads();
-    let mut documents = 0usize;
-    let mut bytes = 0i64;
 
     let start = usage::take();
-    let view = store.view()?;
-    // One channel per worker rather than one shared queue, because a shared
-    // queue needs a lock around the receiving end and the thing being handed
-    // over is a whole document. Round robin gives every worker the same number
-    // of documents and none of the contention.
-    let batches = std::thread::scope(
-        |scope| -> Result<Vec<(Prepared, usize)>, Box<dyn std::error::Error>> {
-            let mut senders = Vec::with_capacity(threads);
-            let mut handles = Vec::with_capacity(threads);
-            for _ in 0..threads {
-                // A bound rather than an unbounded channel, so that a reader
-                // that is quicker than the analysers cannot pull the corpus
-                // into memory ahead of them.
-                let (tx, rx) = std::sync::mpsc::sync_channel::<corpus::Document>(64);
-                senders.push(tx);
-                let view = &view;
-                handles.push(scope.spawn(move || -> Result<(Prepared, usize), String> {
-                    let mut batch = Batch::over(view).map_err(|e| e.to_string())?;
-                    let mut text = String::new();
-                    while let Ok(d) = rx.recv() {
-                        text.clear();
-                        text.push_str(&d.title);
-                        text.push(' ');
-                        text.push_str(&d.body);
-                        let stored = [
-                            ("id", d.id.as_bytes()),
-                            ("repo", d.repo.as_bytes()),
-                            ("path", d.path.as_bytes()),
-                            ("title", d.title.as_bytes()),
-                            ("body", d.body.as_bytes()),
-                            ("ext", d.ext.as_bytes()),
-                        ];
-                        batch
-                            .add_keyed_with_fields(d.id.as_bytes(), &text, stored)
-                            .map_err(|e| e.to_string())?;
-                    }
-                    let replaced = batch.replacements();
-                    let prepared = batch.finish().map_err(|e| e.to_string())?;
-                    Ok((prepared, replaced))
-                }));
-            }
+    // The corpus is read and parsed on this thread, which is where the Tantivy
+    // runner does it too, so the difference between the two update phases is
+    // the engine and not the JSON. It streams into the workers rather than
+    // being collected first, for the same reason: a phase that read five
+    // thousand documents into a vector and then started analysing them would be
+    // timing two things one after another that every engine here does at once.
+    let counted = std::cell::Cell::new(0usize);
+    let read = std::cell::Cell::new(0i64);
+    let documents = corpus::stream(&cfg.corpus)?.take(want).inspect(|d| {
+        if let Ok(d) = d {
+            counted.set(counted.get() + 1);
+            read.set(read.get() + d.body.len() as i64);
+        }
+    });
 
-            // The parsing stays on this thread, which is where the Tantivy
-            // runner does it too, so the difference between the two update
-            // phases is the engine and not the JSON.
-            corpus::read(&cfg.corpus, |d| {
-                if documents >= want {
-                    return false;
-                }
-                bytes += d.body.len() as i64;
-                let sent = senders[documents % threads].send(d).is_ok();
-                documents += 1;
-                sent
-            })?;
-            // The workers stop when their channel closes and not before, so the
-            // senders go before the join and not after it.
-            senders.clear();
-
-            Ok(handles
-                .into_iter()
-                .map(|handle| {
-                    handle
-                        .join()
-                        .unwrap_or_else(|_| Err("a batch panicked".to_string()))
-                })
-                .collect::<Result<Vec<_>, _>>()?)
-        },
-    )?;
-
-    let replaced = batches.iter().map(|(_, count)| count).sum::<usize>();
-    let prepared: Vec<Prepared> = batches.into_iter().map(|(prepared, _)| prepared).collect();
-    drop(view);
     let now = stamp();
-    // One commit of every batch, which is what makes this one update rather
-    // than as many updates as there are threads. Each batch brings a segment
-    // and the deletions of the copies it replaced, and the store publishes
-    // them together.
-    ingest::commit_all(&mut store, prepared, now, now)?;
+    let done = ingest::spread(
+        &mut store,
+        threads,
+        documents,
+        // A document that would not parse has no key, which puts it wherever
+        // there is room and lets the add below be the thing that reports it.
+        |d| d.as_ref().map_or(&[][..], |d| d.id.as_bytes()),
+        |batch, d| {
+            let d = d.map_err(Trouble::Io)?;
+            let mut text = String::with_capacity(d.title.len() + 1 + d.body.len());
+            text.push_str(&d.title);
+            text.push(' ');
+            text.push_str(&d.body);
+            let stored = [
+                ("id", d.id.as_bytes()),
+                ("repo", d.repo.as_bytes()),
+                ("path", d.path.as_bytes()),
+                ("title", d.title.as_bytes()),
+                ("body", d.body.as_bytes()),
+                ("ext", d.ext.as_bytes()),
+            ];
+            batch.add_keyed_with_fields(d.id.as_bytes(), &text, stored)?;
+            Ok(())
+        },
+        now,
+        now,
+    )?;
+    let documents = counted.get();
+    let bytes = read.get();
     store.sync()?;
     drop(store);
     let usage = usage::measure(&start);
@@ -496,9 +467,10 @@ fn update_phase(
     // of the corpus the index phase read. A run where they did not has either
     // read a different corpus or lost a key table, and a rate for that is worse
     // than no rate at all.
-    if replaced != documents {
+    if done.replaced != documents {
         return Err(format!(
-            "{documents} documents went in and {replaced} of them replaced a copy already in the store"
+            "{documents} documents went in and {} of them replaced a copy already in the store",
+            done.replaced
         )
         .into());
     }
