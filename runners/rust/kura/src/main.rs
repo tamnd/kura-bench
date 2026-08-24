@@ -231,7 +231,11 @@ fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     // parallel build leaves. A store of one segment is what a query wants and
     // what the rivals end their index phase with too, since Tantivy's runner
     // waits for its merging threads before it stops the clock.
-    let segment = index::Writer::build(writers)?;
+    //
+    // The fold gets the same thread count the slices got. It was a third of
+    // this phase on one core while the rest of the machine waited, and it
+    // writes the same segment either way, so there is nothing to trade.
+    let segment = index::Writer::build_on(writers, threads)?;
     let path = cfg.work.join(INDEX_FILE);
     let now = stamp();
     let mut store = Store::create_with_log(&path, STORE, now, LOG_LEN)?;
