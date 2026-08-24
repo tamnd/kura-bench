@@ -43,6 +43,29 @@ where
     Ok(())
 }
 
+/// Every document, as an iterator rather than as a callback.
+///
+/// The same read as [`read`], for a caller that has to hand the documents to
+/// something that pulls rather than something it can push into. It streams the
+/// same way, one line at a time out of the same sized buffer, so a runner using
+/// this is reading the corpus exactly as a runner using [`read`] is.
+///
+/// A line that will not parse comes back as an item rather than ending the
+/// iteration, because a caller that is feeding another thread has somewhere to
+/// report it and nowhere to return it from.
+pub fn stream(name: &Path) -> std::io::Result<impl Iterator<Item = std::io::Result<Document>>> {
+    let file = File::open(name)?;
+    let reader = BufReader::with_capacity(1 << 20, file);
+    Ok(reader
+        .lines()
+        .filter(|line| !matches!(line, Ok(line) if line.is_empty()))
+        .map(|line| {
+            let line = line?;
+            serde_json::from_str(&line)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        }))
+}
+
 /// Splits the corpus into `count` byte ranges of roughly equal size.
 ///
 /// The cuts land wherever the arithmetic puts them and not on a line boundary.
@@ -117,21 +140,50 @@ pub fn queries(name: &Path) -> std::io::Result<Vec<String>> {
 mod tests {
     use super::*;
 
-    /// The property every parallel runner rests on: the ranges together are the
-    /// corpus, in order, with nothing read twice and nothing missed.
-    #[test]
-    fn the_shards_together_are_the_corpus() {
-        let dir = std::env::temp_dir().join("benchrs-shards");
-        std::fs::create_dir_all(&dir).expect("makes the directory");
+    /// Writes a corpus of `count` documents and returns where it put it.
+    fn corpus(dir: &Path, count: usize) -> std::path::PathBuf {
+        std::fs::create_dir_all(dir).expect("makes the directory");
         let path = dir.join("corpus.jsonl");
         let mut text = String::new();
-        for i in 0..500 {
+        for i in 0..count {
             text.push_str(&format!(
                 "{{\"id\":\"{i}\",\"repo\":\"r\",\"path\":\"p\",\"title\":\"t\",\"body\":\"{}\",\"ext\":\"md\"}}\n",
                 "word ".repeat(i % 40)
             ));
         }
         std::fs::write(&path, &text).expect("writes the corpus");
+        path
+    }
+
+    /// Two ways of reading the same file that gave different documents would
+    /// make two runners using them incomparable, which is the whole point of
+    /// this crate.
+    #[test]
+    fn streaming_the_corpus_gives_what_reading_it_gives() {
+        let dir = std::env::temp_dir().join("benchrs-stream");
+        let path = corpus(&dir, 200);
+
+        let mut pushed = Vec::new();
+        read(&path, |d| {
+            pushed.push(d.id);
+            true
+        })
+        .expect("reads");
+        let pulled: Vec<String> = stream(&path)
+            .expect("opens")
+            .map(|d| d.expect("parses").id)
+            .collect();
+
+        assert_eq!(pulled, pushed);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The property every parallel runner rests on: the ranges together are the
+    /// corpus, in order, with nothing read twice and nothing missed.
+    #[test]
+    fn the_shards_together_are_the_corpus() {
+        let dir = std::env::temp_dir().join("benchrs-shards");
+        let path = corpus(&dir, 500);
 
         let mut whole = Vec::new();
         read(&path, |d| {
