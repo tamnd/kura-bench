@@ -6,8 +6,8 @@
 //! others, and where kura does less work than a rival the comment says so
 //! rather than letting the number stand on its own.
 //!
-//! Two differences from the Tantivy runner are worth stating up front, because
-//! both make a number look better than a like for like comparison would.
+//! One difference from the Tantivy runner is worth stating up front, because it
+//! makes a number look better than a like for like comparison would.
 //!
 //! kura's index writer takes one text stream per document, so the title and the
 //! body are concatenated rather than indexed as two fields. That is one term
@@ -15,10 +15,24 @@
 //! title match is not weighted above a body match the way a fielded engine can
 //! weight it. It costs kura some relevance and saves it some work.
 //!
-//! kura has no tombstones yet, so there is no update phase. Reindexing a slice
-//! of the corpus is not an operation this engine can do, and reporting the time
-//! to append the same documents twice would be reporting a different operation
-//! under the same name.
+//! The index is a store rather than a bare segment, and every document goes in
+//! under its corpus identifier as a key. Both of those cost something and both
+//! are what the rivals pay: Tantivy indexes an id field it can delete by, and
+//! its index is a directory with a metadata file rather than a segment on its
+//! own. Before this the runner wrote a segment with no key table, which made
+//! the index phase faster than the phase every other engine here was timed on
+//! and left the update phase with nothing to report. The store also means a
+//! query opens through a manifest, so the open phase now reads a superblock and
+//! a manifest slot before it reads the segment. The file also reserves a log
+//! region that nothing here writes through, and the size of that reservation is
+//! in the on disk figure, so it is set to 16 MB rather than left at the default
+//! quarter of a gigabyte.
+//!
+//! The update phase replaces documents through the path a caller would use: a
+//! batch looks each key up in the segments the store holds, and the new copy
+//! and the deletion of the old one go into one commit, so a query sees one or
+//! the other and never both. That is the same operation the Tantivy runner asks
+//! for with a delete by term and an add.
 //!
 //! The index phase reads the corpus on every core. Each thread takes a byte
 //! range of the file, parses the documents in it and fills a writer of its own,
@@ -33,16 +47,38 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use benchrs::config::Config;
-use benchrs::{SEARCH_LIMIT, config, corpus, machine, result, usage};
+use benchrs::{SEARCH_LIMIT, UPDATE_DOCUMENTS, config, corpus, machine, result, usage};
 
+use kura_core::file::{Appending, Store};
 use kura_core::index;
+use kura_core::ingest::Batch;
 use kura_core::residency;
 use kura_core::search::Searcher;
-use kura_core::segment::Segment;
 use kura_core::store;
 
 /// The one file a kura index is.
 const INDEX_FILE: &str = "index.kura";
+
+/// The identifier written into the superblock, so a file this made says so.
+///
+/// It is "kura-bench" in the low bytes, which is what a hex dump of the first
+/// sixteen bytes of the file shows to anybody wondering where it came from.
+const STORE: u128 = 0x6b75_7261_2d62_656e_6368_0000_0000_0001;
+
+/// How much of the file is set aside for the log, which is a reservation and
+/// not an index.
+///
+/// A store puts its log at a fixed offset and starts the segments after it, so
+/// the length is chosen once when the file is made and the on disk figure this
+/// run reports includes it. The default is a quarter of a gigabyte, which on a
+/// corpus this size would be more than the index and would make the column
+/// unreadable.
+///
+/// Nothing here writes through the log. A commit publishes a segment and syncs
+/// it, which is the same durability the other engines report at the end of
+/// their index phase, so the ring is sized to hold one batch of records for a
+/// caller who wanted the logged path rather than to be a number.
+const LOG_LEN: u64 = 16 * 1024 * 1024;
 
 fn main() {
     if let Err(err) = run() {
@@ -75,7 +111,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-const NO_UPDATES: &str = "there is no update phase because the engine has no tombstones yet, so it cannot replace a document";
+/// The wall clock in whole seconds, which is what a store records as the
+/// moment a segment was made.
+fn stamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
+}
 
 /// Indexes one slice of the corpus, and returns the writer with what it read.
 ///
@@ -118,7 +160,11 @@ fn index_slice(
             ("body", d.body.as_bytes()),
             ("ext", d.ext.as_bytes()),
         ];
-        if let Err(e) = writer.add_with_fields(&text, stored) {
+        // Keyed, because a document that cannot be found by its identifier
+        // cannot be replaced, and the update phase below is the reason the key
+        // table is built at all. Tantivy indexes the same identifier as a field
+        // for the same reason.
+        if let Err(e) = writer.add_keyed_with_fields(d.id.as_bytes(), &text, stored) {
             failed = Some(e);
             return false;
         }
@@ -177,16 +223,29 @@ fn index_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     // add, because an engine that buffers and flushes later has not done less
     // work than one that flushed as it went.
     //
-    // The segment is written straight to the file rather than asked for its
+    // The segment is written straight into the store rather than asked for its
     // bytes, which would mean holding a second whole copy of the index in
     // memory, and on a corpus this size that copy is most of the peak.
+    //
+    // One commit of one segment, which is what the fold at the end of the
+    // parallel build leaves. A store of one segment is what a query wants and
+    // what the rivals end their index phase with too, since Tantivy's runner
+    // waits for its merging threads before it stops the clock.
     let segment = index::Writer::build(writers)?;
     let path = cfg.work.join(INDEX_FILE);
-    let mut file = std::io::BufWriter::new(std::fs::File::create(&path)?);
-    segment.write_to(&mut file)?;
-    let file = file.into_inner()?;
-    file.sync_all()?;
-    drop(file);
+    let now = stamp();
+    let mut store = Store::create_with_log(&path, STORE, now, LOG_LEN)?;
+    let docs = u32::try_from(documents)?;
+    // The closure takes its argument type in writing because the parameter is
+    // higher ranked over the lifetime inside Appending, and inference will not
+    // guess that on its own.
+    store.publish_with(
+        Some((docs, |into: &mut Appending<'_>| segment.write_to(into))),
+        now,
+        &[],
+        now,
+    )?;
+    drop(store);
     let phase = usage::measure(&start);
 
     let (size, files) = result::dir_size(&cfg.work);
@@ -216,19 +275,21 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     // first search would otherwise report that work as free.
     //
     // The file is mapped rather than read, which is what the rivals here do and
-    // is the only way a resident set figure means anything. The checksum is not
-    // verified, for the same reason Tantivy verifies nothing: it would fault in
-    // every page of the file and the number would be a read throughput
-    // measurement wearing an open phase's name.
+    // is the only way a resident set figure means anything. Opening a store
+    // reads the superblock and the newer of the two manifest slots and then
+    // maps the rest, and the digests are not verified, for the same reason
+    // Tantivy verifies nothing: it would fault in every page of the file and
+    // the number would be a read throughput measurement wearing an open
+    // phase's name.
     let open_start = usage::take();
-    let file = std::fs::File::open(cfg.work.join(INDEX_FILE))?;
-    // SAFETY: the benchmark owns the work directory and nothing else writes to
-    // the file while it is mapped, which is the condition a map relies on.
-    let map = unsafe { memmap2::Mmap::map(&file)? };
-    let segment = Segment::open_without_checksum(&map)?;
-    let reader = index::Reader::open(&segment)?;
+    let store = Store::open(&cfg.work.join(INDEX_FILE))?;
+    let view = store.view()?;
+    let readers = view.readers()?;
+    let reader = readers
+        .first()
+        .ok_or("the store the index phase wrote holds no segments")?;
     let mut scratch = store::Scratch::new();
-    search_once(&reader, &queries[0], SEARCH_LIMIT, &mut scratch)?;
+    search_once(reader, &queries[0], SEARCH_LIMIT, &mut scratch)?;
     let open = usage::measure(&open_start);
     res.open = result::OpenPhase {
         resident_bytes: open.rss_bytes,
@@ -241,7 +302,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     // of the index a query had to fetch. The probe is started after the open
     // phase on purpose: the open phase answered a query, so some of the file is
     // already resident, and resident_before is what says how much.
-    let probe = residency::Probe::start(&map);
+    let probe = residency::Probe::start(view.bytes(0).unwrap_or_default());
 
     let search_start = usage::take();
     let mut stats = Vec::with_capacity(queries.len());
@@ -249,11 +310,11 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
         // One warm up that is not counted, because the first run of a query
         // pays for whatever the operating system has not faulted in yet and no
         // deployment sees that cost on every request.
-        let mut hits = search_once(&reader, q, SEARCH_LIMIT, &mut scratch)?;
+        let mut hits = search_once(reader, q, SEARCH_LIMIT, &mut scratch)?;
         let mut runs = Vec::with_capacity(cfg.repeat);
         for _ in 0..cfg.repeat {
             let t = Instant::now();
-            hits = search_once(&reader, q, SEARCH_LIMIT, &mut scratch)?;
+            hits = search_once(reader, q, SEARCH_LIMIT, &mut scratch)?;
             runs.push(t.elapsed().as_secs_f64() * 1000.0);
         }
         stats.push(result::summarise(q, hits, runs));
@@ -264,7 +325,7 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     // report prints next to a serial latency.
     let touched = probe.finish();
 
-    let concurrent = concurrent_phase(&reader, &queries, cfg);
+    let concurrent = concurrent_phase(reader, &queries, cfg);
     res.search = result::SearchPhase {
         usage: search,
         queries: stats,
@@ -286,17 +347,104 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
             before as f64 / touched.total.max(1) as f64 * 100.0,
         );
     }
-    // No update phase. See the note at the top of the file. The note is set
-    // here rather than in run, because the harness runs the phases as separate
-    // processes and merges the two results, and a note set in both would be
-    // written down twice.
-    res.update = None;
-    if res.notes.is_empty() {
-        res.notes = NO_UPDATES.to_string();
-    } else {
-        res.notes = format!("{}; {NO_UPDATES}", res.notes);
-    }
+    // Everything that read the store goes out of scope before the update runs,
+    // because a batch needs the store back to commit into and the view is what
+    // is holding it. The searcher, the readers and the view all borrow it.
+    drop(view);
+    res.update = Some(update_phase(cfg, store)?);
     Ok(())
+}
+
+/// Replaces the first documents of the corpus, which is what an update is.
+///
+/// The same operation the Tantivy runner asks for and on the same documents:
+/// take the first so many out of the corpus file and put them in again under
+/// the identifiers they already have. Adding them without the replacement would
+/// double the corpus and report a rate for an operation nobody runs.
+///
+/// A batch is what carries it. Each keyed add looks the key up in the segments
+/// the store holds, which is a filter and then a table per segment, and records
+/// that the copy it found is to be deleted. The commit at the end writes the
+/// new segment and the deletions in one go, so there is no window in which both
+/// copies are visible and none in which neither is.
+///
+/// The whole set goes in one batch on purpose. A batch that filled and
+/// committed halfway would be two commits and two segments, and the rivals here
+/// are timed on one commit, so this measures the same shape. The memory that
+/// costs is in the peak the phase reports.
+fn update_phase(
+    cfg: &Config,
+    mut store: Store,
+) -> Result<result::UpdatePhase, Box<dyn std::error::Error>> {
+    let want = cfg.capped(UPDATE_DOCUMENTS);
+    let mut documents = 0usize;
+    let mut bytes = 0i64;
+    let mut text = String::new();
+    let mut failed: Option<kura_core::file::Trouble> = None;
+
+    let start = usage::take();
+    let view = store.view()?;
+    let mut batch = Batch::over(&view)?;
+    corpus::read(&cfg.corpus, |d| {
+        if documents >= want {
+            return false;
+        }
+        documents += 1;
+        bytes += d.body.len() as i64;
+        text.clear();
+        text.push_str(&d.title);
+        text.push(' ');
+        text.push_str(&d.body);
+        let stored = [
+            ("id", d.id.as_bytes()),
+            ("repo", d.repo.as_bytes()),
+            ("path", d.path.as_bytes()),
+            ("title", d.title.as_bytes()),
+            ("body", d.body.as_bytes()),
+            ("ext", d.ext.as_bytes()),
+        ];
+        if let Err(e) = batch.add_keyed_with_fields(d.id.as_bytes(), &text, stored) {
+            failed = Some(e);
+            return false;
+        }
+        true
+    })?;
+    if let Some(e) = failed {
+        return Err(e.into());
+    }
+    let replaced = batch.replacements();
+    let prepared = batch.finish()?;
+    drop(view);
+    let now = stamp();
+    prepared.commit(&mut store, now, now)?;
+    store.sync()?;
+    drop(store);
+    let usage = usage::measure(&start);
+
+    // Every document handed in should have replaced one, because they came out
+    // of the corpus the index phase read. A run where they did not has either
+    // read a different corpus or lost a key table, and a rate for that is worse
+    // than no rate at all.
+    if replaced != documents {
+        return Err(format!(
+            "{documents} documents went in and {replaced} of them replaced a copy already in the store"
+        )
+        .into());
+    }
+
+    let (size, _) = result::dir_size(&cfg.work);
+    eprintln!(
+        "replaced {documents} documents in {:.1}s, {:.0} docs/s, index {:.1} MB",
+        usage.wall_seconds,
+        documents as f64 / usage.wall_seconds.max(f64::MIN_POSITIVE),
+        size as f64 / (1 << 20) as f64,
+    );
+    Ok(result::UpdatePhase {
+        usage,
+        documents,
+        bytes,
+        index_bytes_after: size,
+    })
 }
 
 /// Runs one query and returns the total number of matches, which is not the
