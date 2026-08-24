@@ -135,7 +135,7 @@ jobs:
         run: ./bin/kura-bench -corpus corpus.jsonl -queries queries.txt -bin bin -out smoke -repeat 3
       - name: show the report
         run: cat smoke/report-*.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: smoke-results
           path: smoke/
@@ -193,7 +193,7 @@ jobs:
           -engines exact,turbovec
       - name: show the reports
         run: cat smoke/vector-report-*.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vector-smoke-results
           path: smoke/
@@ -269,7 +269,7 @@ jobs:
           echo "every engine agrees on every operation"
       - name: show the report
         run: cat smoke/graph-report-*.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: graph-smoke-results-${{ matrix.os }}
           path: smoke/
