@@ -1,0 +1,209 @@
+{
+  "engine": "tantivy",
+  "version": "tantivy v0.26.1, index_format v7",
+  "language": "rust",
+  "corpus": {
+    "documents": 82789,
+    "bytes": 486518871
+  },
+  "index": {
+    "usage": {
+      "wall_seconds": 6.999850208,
+      "user_seconds": 14.908515,
+      "sys_seconds": 1.7504590000000002,
+      "peak_rss_bytes": 476479488,
+      "rss_bytes": 476479488,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "bytes": 293402782,
+    "files": 52
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.005357083,
+      "user_seconds": 0.001071,
+      "sys_seconds": 0.002807000000000002,
+      "peak_rss_bytes": 9060352,
+      "rss_bytes": 9060352,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 9060352
+  },
+  "search": {
+    "usage": {
+      "wall_seconds": 0.094998125,
+      "user_seconds": 0.0911,
+      "sys_seconds": 0.002064,
+      "peak_rss_bytes": 24412160,
+      "rss_bytes": 24412160,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "queries": [
+      {
+        "query": "memory allocation",
+        "hits": 4753,
+        "runs": 20,
+        "min_ms": 0.201292,
+        "median_ms": 0.202083,
+        "p90_ms": 0.203542,
+        "p99_ms": 0.220958,
+        "max_ms": 0.220958
+      },
+      {
+        "query": "return value",
+        "hits": 32997,
+        "runs": 20,
+        "min_ms": 0.6456670000000001,
+        "median_ms": 0.647167,
+        "p90_ms": 0.651958,
+        "p99_ms": 0.7108340000000001,
+        "max_ms": 0.7108340000000001
+      },
+      {
+        "query": "error handling",
+        "hits": 31008,
+        "runs": 20,
+        "min_ms": 0.5289999999999999,
+        "median_ms": 0.5297919999999999,
+        "p90_ms": 0.5335420000000001,
+        "p99_ms": 0.560542,
+        "max_ms": 0.560542
+      },
+      {
+        "query": "deadlock detection",
+        "hits": 804,
+        "runs": 20,
+        "min_ms": 0.103125,
+        "median_ms": 0.10387500000000001,
+        "p90_ms": 0.106209,
+        "p99_ms": 0.13574999999999998,
+        "max_ms": 0.13574999999999998
+      },
+      {
+        "query": "reference counting",
+        "hits": 4317,
+        "runs": 20,
+        "min_ms": 0.157458,
+        "median_ms": 0.15825,
+        "p90_ms": 0.162209,
+        "p99_ms": 0.19270800000000002,
+        "max_ms": 0.19270800000000002
+      },
+      {
+        "query": "buffer overflow check",
+        "hits": 19602,
+        "runs": 20,
+        "min_ms": 0.451875,
+        "median_ms": 0.45545800000000003,
+        "p90_ms": 0.464333,
+        "p99_ms": 0.527709,
+        "max_ms": 0.527709
+      },
+      {
+        "query": "thread pool shutdown",
+        "hits": 3763,
+        "runs": 20,
+        "min_ms": 0.18812500000000001,
+        "median_ms": 0.189166,
+        "p90_ms": 0.19633399999999998,
+        "p99_ms": 0.259042,
+        "max_ms": 0.259042
+      },
+      {
+        "query": "mmap_region",
+        "hits": 0,
+        "runs": 20,
+        "min_ms": 0.041708,
+        "median_ms": 0.041959,
+        "p90_ms": 0.043625000000000004,
+        "p99_ms": 0.066666,
+        "max_ms": 0.066666
+      },
+      {
+        "query": "kasan",
+        "hits": 9,
+        "runs": 20,
+        "min_ms": 0.03875,
+        "median_ms": 0.039208999999999994,
+        "p90_ms": 0.040125,
+        "p99_ms": 0.048625,
+        "max_ms": 0.048625
+      },
+      {
+        "query": "tsan_atomic",
+        "hits": 0,
+        "runs": 20,
+        "min_ms": 0.030042000000000003,
+        "median_ms": 0.030208,
+        "p90_ms": 0.030792,
+        "p99_ms": 0.041208,
+        "max_ms": 0.041208
+      },
+      {
+        "query": "backwards compatibility guarantee",
+        "hits": 2473,
+        "runs": 20,
+        "min_ms": 0.1445,
+        "median_ms": 0.145209,
+        "p90_ms": 0.155,
+        "p99_ms": 0.186333,
+        "max_ms": 0.186333
+      },
+      {
+        "query": "deprecated in favour of",
+        "hits": 53301,
+        "runs": 20,
+        "min_ms": 1.184917,
+        "median_ms": 1.187041,
+        "p90_ms": 1.19275,
+        "p99_ms": 1.264292,
+        "max_ms": 1.264292
+      },
+      {
+        "query": "the",
+        "hits": 51086,
+        "runs": 20,
+        "min_ms": 0.438041,
+        "median_ms": 0.43937499999999996,
+        "p90_ms": 0.44420899999999996,
+        "p99_ms": 0.464583,
+        "max_ms": 0.464583
+      }
+    ],
+    "concurrent": {
+      "workers": 13,
+      "queries": 260,
+      "seconds": 0.017404916,
+      "median_ms": 0.281791,
+      "p99_ms": 5.126917
+    }
+  },
+  "update": {
+    "usage": {
+      "wall_seconds": 1.728940584,
+      "user_seconds": 1.6355659999999999,
+      "sys_seconds": 0.268451,
+      "peak_rss_bytes": 293814272,
+      "rss_bytes": 293814272,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "documents": 5000,
+    "bytes": 42053514,
+    "index_bytes_after": 321689992
+  },
+  "machine": {
+    "host": "USERnoMacBook-Air.local",
+    "os": "macos",
+    "arch": "aarch64",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memory_bytes": 25769803776,
+    "load_before": 54.1,
+    "memory_free_bytes": 0,
+    "dedicated": false
+  }
+}

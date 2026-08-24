@@ -1,0 +1,209 @@
+{
+  "engine": "seekstorm",
+  "version": "3.3.5",
+  "language": "rust",
+  "corpus": {
+    "documents": 82789,
+    "bytes": 486518871
+  },
+  "index": {
+    "usage": {
+      "wall_seconds": 65.630763333,
+      "user_seconds": 36.614613999999996,
+      "sys_seconds": 44.335421000000004,
+      "peak_rss_bytes": 3611738112,
+      "rss_bytes": 3611738112,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "bytes": 366607590,
+    "files": 73
+  },
+  "open": {
+    "usage": {
+      "wall_seconds": 0.0369975,
+      "user_seconds": 0.101936,
+      "sys_seconds": 0.0575,
+      "peak_rss_bytes": 402014208,
+      "rss_bytes": 402014208,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "resident_bytes": 402014208
+  },
+  "search": {
+    "usage": {
+      "wall_seconds": 0.14025525,
+      "user_seconds": 0.20808,
+      "sys_seconds": 0.02296899999999999,
+      "peak_rss_bytes": 429408256,
+      "rss_bytes": 429408256,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "queries": [
+      {
+        "query": "memory allocation",
+        "hits": 4315,
+        "runs": 20,
+        "min_ms": 0.69075,
+        "median_ms": 0.7242919999999999,
+        "p90_ms": 0.967167,
+        "p99_ms": 1.916916,
+        "max_ms": 1.916916
+      },
+      {
+        "query": "return value",
+        "hits": 32158,
+        "runs": 20,
+        "min_ms": 0.902584,
+        "median_ms": 0.958,
+        "p90_ms": 1.058292,
+        "p99_ms": 1.369458,
+        "max_ms": 1.369458
+      },
+      {
+        "query": "error handling",
+        "hits": 29933,
+        "runs": 20,
+        "min_ms": 0.192583,
+        "median_ms": 0.217417,
+        "p90_ms": 0.24654199999999998,
+        "p99_ms": 0.29854200000000003,
+        "max_ms": 0.29854200000000003
+      },
+      {
+        "query": "deadlock detection",
+        "hits": 752,
+        "runs": 20,
+        "min_ms": 0.39191600000000004,
+        "median_ms": 0.42666699999999996,
+        "p90_ms": 0.563625,
+        "p99_ms": 0.6723750000000001,
+        "max_ms": 0.6723750000000001
+      },
+      {
+        "query": "reference counting",
+        "hits": 4058,
+        "runs": 20,
+        "min_ms": 0.19837500000000002,
+        "median_ms": 0.218875,
+        "p90_ms": 0.231041,
+        "p99_ms": 0.3015,
+        "max_ms": 0.3015
+      },
+      {
+        "query": "buffer overflow check",
+        "hits": 13443,
+        "runs": 20,
+        "min_ms": 1.042083,
+        "median_ms": 1.1389580000000001,
+        "p90_ms": 1.362541,
+        "p99_ms": 1.488375,
+        "max_ms": 1.488375
+      },
+      {
+        "query": "thread pool shutdown",
+        "hits": 3180,
+        "runs": 20,
+        "min_ms": 0.2895,
+        "median_ms": 0.309833,
+        "p90_ms": 0.3455,
+        "p99_ms": 0.391625,
+        "max_ms": 0.391625
+      },
+      {
+        "query": "mmap_region",
+        "hits": 0,
+        "runs": 20,
+        "min_ms": 0.022333000000000002,
+        "median_ms": 0.025208,
+        "p90_ms": 0.031292,
+        "p99_ms": 0.079584,
+        "max_ms": 0.079584
+      },
+      {
+        "query": "kasan",
+        "hits": 3,
+        "runs": 20,
+        "min_ms": 0.134833,
+        "median_ms": 0.166167,
+        "p90_ms": 0.34125,
+        "p99_ms": 0.771417,
+        "max_ms": 0.771417
+      },
+      {
+        "query": "tsan_atomic",
+        "hits": 0,
+        "runs": 20,
+        "min_ms": 0.024624999999999998,
+        "median_ms": 0.034041999999999996,
+        "p90_ms": 0.042041,
+        "p99_ms": 0.063125,
+        "max_ms": 0.063125
+      },
+      {
+        "query": "backwards compatibility guarantee",
+        "hits": 2231,
+        "runs": 20,
+        "min_ms": 0.289917,
+        "median_ms": 0.345584,
+        "p90_ms": 0.46425,
+        "p99_ms": 0.525125,
+        "max_ms": 0.525125
+      },
+      {
+        "query": "deprecated in favour of",
+        "hits": 51164,
+        "runs": 20,
+        "min_ms": 0.375,
+        "median_ms": 0.408541,
+        "p90_ms": 0.48674999999999996,
+        "p99_ms": 0.5788749999999999,
+        "max_ms": 0.5788749999999999
+      },
+      {
+        "query": "the",
+        "hits": 50989,
+        "runs": 20,
+        "min_ms": 1.05125,
+        "median_ms": 1.120083,
+        "p90_ms": 1.355708,
+        "p99_ms": 1.709,
+        "max_ms": 1.709
+      }
+    ],
+    "concurrent": {
+      "workers": 13,
+      "queries": 260,
+      "seconds": 0.029537,
+      "median_ms": 1.247916,
+      "p99_ms": 3.668584
+    }
+  },
+  "update": {
+    "usage": {
+      "wall_seconds": 18.684304417,
+      "user_seconds": 10.446264000000001,
+      "sys_seconds": 13.743319999999999,
+      "peak_rss_bytes": 2392129536,
+      "rss_bytes": 2392129536,
+      "read_bytes": 0,
+      "write_bytes": 0
+    },
+    "documents": 5000,
+    "bytes": 42053514,
+    "index_bytes_after": 398959890
+  },
+  "machine": {
+    "host": "USERnoMacBook-Air.local",
+    "os": "macos",
+    "arch": "aarch64",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memory_bytes": 25769803776,
+    "load_before": 11.26,
+    "memory_free_bytes": 0,
+    "dedicated": false
+  }
+}

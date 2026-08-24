@@ -21,6 +21,28 @@ So the corpus became one JSON lines file.
 Reading it is sequential, it fits in the page cache, and the same file can be copied to another machine and produce a comparable result.
 What is left after that is the engine.
 
+## What the text suite says today
+
+The whole corpus is 82,789 documents and 464.0 MB of text, taken from six pinned checkouts, and the run below is four engines over all of it on one laptop.
+The full report is `results/report-usernomacbook-air-local.md` and the per engine files beside it are what it was built from.
+
+| | kura | tantivy | seekstorm | sqlite-fts5 |
+| --- | --- | --- | --- | --- |
+| index wall | 6.9 s | 7.0 s | 1m05s | 50.3 s |
+| index docs/s | 11,973 | 11,827 | 1,261 | 1,647 |
+| peak RSS while indexing | 478.0 MB | 454.4 MB | 3.36 GB | 69.9 MB |
+| index on disk, in files | 202.1 MB, 1 | 279.8 MB, 52 | 349.6 MB, 73 | 650.6 MB, 3 |
+| cold start | 2 ms, 3.7 MB | 5 ms, 8.6 MB | 37 ms, 383.4 MB | 41 ms, 2.7 MB |
+| query median | 0.16 ms | 0.19 ms | 0.35 ms | 11 ms |
+| query p99 | 0.81 ms | 1.26 ms | 1.92 ms | 517 ms |
+| 13 workers | 18,753 q/s | 14,938 q/s | 8,802 q/s | 52 q/s |
+| update 5,000 documents | 415 ms | 1.7 s | 18.7 s | 7.2 s |
+
+Read this as one machine on one day rather than as a league table.
+The load average before the run was 5.79, so every figure in it is a floor and the true numbers on an idle machine are better than these.
+sqlite-fts5 was the engine that ran while the load was highest, so the gap between it and the rest is partly the machine and not only the engine.
+Two engines that disagree about the hit count for a query are not answering the same question, and the per query table in the report is where to check that before comparing their latencies.
+
 ## What is measured, in the text suite
 
 Indexing, and how it scales with the corpus.
