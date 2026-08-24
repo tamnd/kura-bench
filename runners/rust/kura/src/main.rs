@@ -51,7 +51,7 @@ use benchrs::{SEARCH_LIMIT, UPDATE_DOCUMENTS, config, corpus, machine, result, u
 
 use kura_core::file::{Appending, Store};
 use kura_core::index;
-use kura_core::ingest::Batch;
+use kura_core::ingest::{self, Batch, Prepared};
 use kura_core::residency;
 use kura_core::search::Searcher;
 use kura_core::store;
@@ -355,6 +355,21 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
     Ok(())
 }
 
+/// How many threads the update phase analyses on.
+///
+/// KURA_UPDATE_THREADS overrides it, the way KURA_INDEX_THREADS overrides the
+/// index phase, so one machine can take the whole curve rather than one point
+/// on it. The default is every core, because that is what the engines this is
+/// measured against do: Tantivy's update goes through the same writer thread
+/// pool its index phase uses.
+fn update_threads() -> usize {
+    std::env::var("KURA_UPDATE_THREADS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|threads| *threads > 0)
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get))
+}
+
 /// Replaces the first documents of the corpus, which is what an update is.
 ///
 /// The same operation the Tantivy runner asks for and on the same documents:
@@ -368,55 +383,111 @@ fn query_phase(cfg: &Config, res: &mut result::Result) -> Result<(), Box<dyn std
 /// new segment and the deletions in one go, so there is no window in which both
 /// copies are visible and none in which neither is.
 ///
-/// The whole set goes in one batch on purpose. A batch that filled and
-/// committed halfway would be two commits and two segments, and the rivals here
-/// are timed on one commit, so this measures the same shape. The memory that
-/// costs is in the peak the phase reports.
+/// There is a batch per thread and one commit at the end. A batch is a single
+/// threaded thing, and an update phase that ran on one thread would be measured
+/// against engines whose updates do not: Tantivy hands its replacements to the
+/// same writer pool its index phase uses. Every batch prepares against the same
+/// view, each one takes a share of the documents, and the whole group is
+/// published in one commit, so what a query sees is still one update rather
+/// than as many as there are threads.
+///
+/// The set is not committed halfway through on purpose. A batch that filled and
+/// flushed would be two commits, and the rivals here are timed on one, so this
+/// measures the same shape. The memory that costs is in the peak the phase
+/// reports.
+///
+/// It leaves as many segments as it had threads, where a single batch would
+/// leave one, and that shows in the on disk figure and in what the next query
+/// walks.
+///
 fn update_phase(
     cfg: &Config,
     mut store: Store,
 ) -> Result<result::UpdatePhase, Box<dyn std::error::Error>> {
     let want = cfg.capped(UPDATE_DOCUMENTS);
+    let threads = update_threads();
     let mut documents = 0usize;
     let mut bytes = 0i64;
-    let mut text = String::new();
-    let mut failed: Option<kura_core::file::Trouble> = None;
 
     let start = usage::take();
     let view = store.view()?;
-    let mut batch = Batch::over(&view)?;
-    corpus::read(&cfg.corpus, |d| {
-        if documents >= want {
-            return false;
-        }
-        documents += 1;
-        bytes += d.body.len() as i64;
-        text.clear();
-        text.push_str(&d.title);
-        text.push(' ');
-        text.push_str(&d.body);
-        let stored = [
-            ("id", d.id.as_bytes()),
-            ("repo", d.repo.as_bytes()),
-            ("path", d.path.as_bytes()),
-            ("title", d.title.as_bytes()),
-            ("body", d.body.as_bytes()),
-            ("ext", d.ext.as_bytes()),
-        ];
-        if let Err(e) = batch.add_keyed_with_fields(d.id.as_bytes(), &text, stored) {
-            failed = Some(e);
-            return false;
-        }
-        true
-    })?;
-    if let Some(e) = failed {
-        return Err(e.into());
-    }
-    let replaced = batch.replacements();
-    let prepared = batch.finish()?;
+    // One channel per worker rather than one shared queue, because a shared
+    // queue needs a lock around the receiving end and the thing being handed
+    // over is a whole document. Round robin gives every worker the same number
+    // of documents and none of the contention.
+    let batches = std::thread::scope(
+        |scope| -> Result<Vec<(Prepared, usize)>, Box<dyn std::error::Error>> {
+            let mut senders = Vec::with_capacity(threads);
+            let mut handles = Vec::with_capacity(threads);
+            for _ in 0..threads {
+                // A bound rather than an unbounded channel, so that a reader
+                // that is quicker than the analysers cannot pull the corpus
+                // into memory ahead of them.
+                let (tx, rx) = std::sync::mpsc::sync_channel::<corpus::Document>(64);
+                senders.push(tx);
+                let view = &view;
+                handles.push(scope.spawn(move || -> Result<(Prepared, usize), String> {
+                    let mut batch = Batch::over(view).map_err(|e| e.to_string())?;
+                    let mut text = String::new();
+                    while let Ok(d) = rx.recv() {
+                        text.clear();
+                        text.push_str(&d.title);
+                        text.push(' ');
+                        text.push_str(&d.body);
+                        let stored = [
+                            ("id", d.id.as_bytes()),
+                            ("repo", d.repo.as_bytes()),
+                            ("path", d.path.as_bytes()),
+                            ("title", d.title.as_bytes()),
+                            ("body", d.body.as_bytes()),
+                            ("ext", d.ext.as_bytes()),
+                        ];
+                        batch
+                            .add_keyed_with_fields(d.id.as_bytes(), &text, stored)
+                            .map_err(|e| e.to_string())?;
+                    }
+                    let replaced = batch.replacements();
+                    let prepared = batch.finish().map_err(|e| e.to_string())?;
+                    Ok((prepared, replaced))
+                }));
+            }
+
+            // The parsing stays on this thread, which is where the Tantivy
+            // runner does it too, so the difference between the two update
+            // phases is the engine and not the JSON.
+            corpus::read(&cfg.corpus, |d| {
+                if documents >= want {
+                    return false;
+                }
+                bytes += d.body.len() as i64;
+                let sent = senders[documents % threads].send(d).is_ok();
+                documents += 1;
+                sent
+            })?;
+            // The workers stop when their channel closes and not before, so the
+            // senders go before the join and not after it.
+            senders.clear();
+
+            Ok(handles
+                .into_iter()
+                .map(|handle| {
+                    handle
+                        .join()
+                        .unwrap_or_else(|_| Err("a batch panicked".to_string()))
+                })
+                .collect::<Result<Vec<_>, _>>()?)
+        },
+    )?;
+
+    let replaced = batches.iter().map(|(_, count)| count).sum::<usize>();
+    let prepared: Vec<Prepared> = batches.into_iter().map(|(prepared, _)| prepared).collect();
     drop(view);
     let now = stamp();
-    prepared.commit(&mut store, now, now)?;
+    // One commit of every batch, which is what makes this one update rather
+    // than as many updates as there are threads. Each batch brings a segment
+    // and the deletions of the copies it replaced, and the store publishes
+    // them together.
+    ingest::commit_all(&mut store, prepared, now, now)?;
     store.sync()?;
     drop(store);
     let usage = usage::measure(&start);
