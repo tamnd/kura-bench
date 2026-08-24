@@ -9,9 +9,9 @@
 
 # The checkouts the corpus is built from, which kura-corpus fetches at the
 # commits pinned in corpus/sources.go and which come to a gigabyte and a half.
-# The default root is the same directory the Go package lives in, so this
-# ignores the subdirectories rather than the package.
-/corpus/*/
+# The dot is what keeps them out of the way of the Go tools, which skip a
+# directory whose name starts with one.
+/.corpus/
 
 # The vector datasets, which are half a gigabyte for SIFT and four for GIST and
 # are fetched by kura-vectors from the addresses pinned in vectors/dataset.go.

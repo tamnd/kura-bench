@@ -169,6 +169,9 @@ Each one is a shallow fetch of a single commit, the checkout is verified against
 
 Building it is the slowest step in the repository and it only has to happen once per machine.
 
+The directory it fetches into wants to be outside the repository, or named so that the Go tools skip it, which is what `make corpus` does by putting them in `.corpus`.
+A gigabyte and a half of the Go standard library and the Kubernetes tree inside a package of this module is a `go vet ./...` that reports on somebody else's code and a `make lint` that cannot run.
+
 For trying something out there are two other forms, which do not produce a comparable result and are not meant to:
 
 ```sh

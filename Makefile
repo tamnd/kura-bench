@@ -3,7 +3,12 @@ CARGO ?= cargo
 BIN ?= bin
 CORPUS ?= corpus.jsonl
 QUERIES ?= queries.txt
-ROOT ?= corpus
+# Where the checkouts the corpus is built from live. The leading dot is what
+# keeps them out of the way of every Go tool, which skips a directory whose name
+# starts with a dot or an underscore. A gigabyte and a half of the Go standard
+# library and the Kubernetes tree inside a package of this module is a go vet
+# that reports on somebody else's code and a make lint that cannot run.
+ROOT ?= .corpus
 
 GO_RUNNERS := bleve sqlitefts genba
 # The graph runners are written as directory:name, because the binary carries
@@ -119,10 +124,14 @@ test:
 
 .PHONY: lint
 lint:
-	gofmt -l .
+	# The files this repository has, rather than every file under it. gofmt
+	# walks into a directory whose name starts with a dot where the go tool
+	# skips it, so a machine that has fetched the checkouts would otherwise
+	# have the formatting of the Go standard library reported to it here.
+	gofmt -l $$(git ls-files '*.go')
 	$(GO) vet ./...
 	@if command -v $(CARGO) >/dev/null 2>&1; then \
-		$(CARGO) fmt --manifest-path $(RUST)/Cargo.toml --check && \
+		$(CARGO) fmt --manifest-path $(RUST)/Cargo.toml --all --check && \
 		$(CARGO) clippy --manifest-path $(RUST)/Cargo.toml --all-targets -- -D warnings; \
 	fi
 
