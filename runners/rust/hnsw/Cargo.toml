@@ -13,4 +13,4 @@ serde_json.workspace = true
 
 # Pinned exactly. The distances come with it, re-exported from anndists, so
 # there is one version of the crate and not two that happen to agree.
-hnsw_rs = "=0.3.4"
+hnsw_rs = "=0.3.5"
