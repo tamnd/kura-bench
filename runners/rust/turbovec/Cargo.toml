@@ -16,7 +16,7 @@ serde_json.workspace = true
 # "turbovec 1" and silently picked up whatever 1.x resolved that morning is not
 # a number anybody can reproduce, and the scheduled workflow is what tells us a
 # newer one exists.
-turbovec = "=1.0.0"
+turbovec = "=1.1.2"
 
 # Only to pin the pool the engine searches on, so that one query is one core
 # here the same way it is for every other engine in the report.
